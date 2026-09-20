@@ -1,0 +1,18 @@
+# Python deps for A1 (Neural Texture Compression).
+#
+# GPU note: this box's GTX 1050 Ti is compute capability sm_61 (Pascal).
+# The default PyPI torch build (+cu130) dropped Pascal and fails with
+# "no kernel image is available". The cu126 index below has sm_60 kernels,
+# which are binary-compatible with sm_61.
+#
+# On a different machine, install the torch build matching your GPU (see
+# https://pytorch.org/get-started/locally/) and let the extras resolve from
+# PyPI; the non-torch pins below are portable.
+
+--extra-index-url https://download.pytorch.org/whl/cu126
+torch==2.14.0+cu126
+torchvision==0.29.0+cu126
+numpy==2.5.3
+pillow==12.3.0
+matplotlib==3.11.2
+tqdm==4.70.1

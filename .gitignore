@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# Experiment outputs (reconstructions, metrics, checkpoints)
+experiments/
+runs/
+*.pt
+*.pth
+
+# Build artifacts
+*.pdf
+build/
