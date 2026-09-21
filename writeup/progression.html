@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neural Texture Compression — Progression Notes</title>
+<style>
+  :root { --ink:#1b1d21; --muted:#5b616b; --line:#e3e6ea; --bg:#fbfbfc; --accent:#2f5d8a; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 48px 24px 96px; }
+  h1 { font-size: 1.9rem; line-height: 1.2; margin: 0 0 6px; }
+  h2 { font-size: 1.3rem; margin: 44px 0 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+  h3 { font-size: 1.05rem; margin: 28px 0 8px; }
+  .sub { color: var(--muted); margin: 0 0 4px; }
+  .meta { color: var(--muted); font-size: .9rem; }
+  a { color: var(--accent); }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .92em; background: #eef1f4; padding: 1px 5px; border-radius: 4px; }
+  pre { background: #f3f5f7; border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: .95rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { background: #f3f5f7; font-weight: 600; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  figure { margin: 22px 0; }
+  figure img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; display: block; }
+  figcaption { color: var(--muted); font-size: .88rem; margin-top: 8px; }
+  .eq { background: #f3f5f7; border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; margin: 14px 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .95rem; overflow-x: auto; }
+  .callout { border-left: 3px solid var(--accent); background: #f2f6fa; padding: 10px 16px; border-radius: 0 6px 6px 0; margin: 18px 0; }
+  .grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }
+  @media (max-width: 640px) { .grid3 { grid-template-columns: 1fr; } }
+  .kicker { color: var(--accent); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; font-size: .78rem; }
+  .log { list-style: none; padding: 0; }
+  .log li { padding: 8px 0 8px 0; border-bottom: 1px solid var(--line); }
+  .log .date { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 10px; }
+</style>
+</head>
+<body>
+<main>
+
+  <div class="kicker">Neural Texture Compression</div>
+  <h1>Progression notes</h1>
+  <p class="meta">
+    Working log — last updated 2026-09-20. For the project overview, setup, and run commands,
+    see the <a href="../README.md">README</a>. I add to this page as the project grows; the final
+    report will be a trimmed subset of it.
+  </p>
+
+  <h2>Current progress</h2>
+    <h3>Implemented</h3>
+    <ul>
+      <li><strong>Bilinear reference reader: </strong> A full-resolution sampler that every later
+        representation is read through, so quality differences come from the representation and not the
+        sampling code.</li>
+      <li><strong>S3TC/DXT1 baseline: </strong> Classic 4×4 block compression from scratch. It gives a
+        fixed 6× reduction and lands around 41–43 dB, which is the bar the learned version has to beat.</li>
+    </ul>
+    <p>
+      For easy comparision, both implementations are abstracted to expose the same <code>compress(texture)</code> / <code>sample(u, v)</code> interface.
+    </p>
+    <h3>To implement next</h3>
+    <ul>
+      <li>A multi-resolution feature grid plus a decoder MLP, fit per texture, then
+        post-training 8-bit quantization.</li>
+    </ul>
+
+  <h2>The shared read convention</h2>
+  <p>
+    A texel's center sits at <code>(i + 0.5) / size</code>, and a
+    coordinate <code>u</code> maps into continuous texel space as <code>x = u * width - 0.5</code>, likewise
+    for <code>v</code>/<code>y</code>. Lookups outside the texture clamp to the border (replicate padding),
+    matching PyTorch's <code>F.grid_sample(..., align_corners=False, padding_mode="border")</code>. 
+  </p>
+
+  <h2>Bilinear sampling</h2>
+  <p>
+    Given <code>(u, v)</code>, find the four surrounding texels, take the fractional position
+    <code>(s, t)</code> inside the cell, and blend:
+  </p>
+  <div class="eq">
+    color(u, v) = (1−s)(1−t)·c<sub>00</sub> + s(1−t)·c<sub>10</sub> + (1−s)t·c<sub>01</sub> + s·t·c<sub>11</sub>
+  </div>
+  <p>
+    The four corners are named for their offsets: <code>c00</code> is the top-left of the cell and
+    <code>c11</code> the bottom-right. It's vectorized over a batch of coordinates, so the same function
+    handles a few probes or a full megapixel pass.
+  </p>
+  <p>Correctness validated by:</p>
+  <ul>
+    <li>Sampling an image at its own texel centers reproduces it exactly (PSNR = ∞), which pins down the
+      texel-center convention.</li>
+    <li>On random coordinates it matches <code>F.grid_sample</code>
+      (<code>align_corners=False, padding_mode="border"</code>) to floating-point tolerance, borders
+      included.</li>
+  </ul>
+
+  <h2>S3TC / DXT1 block compression</h2>
+  <p>
+    S3TC splits the image into 4×4 blocks and spends a fixed 64 bits per block:
+  </p>
+  <ul>
+    <li>Two endpoint colors, each a 16-bit RGB565 value (2 × 16 = 32 bits).</li>
+    <li>Sixteen 2-bit indices, one per texel (16 × 2 = 32 bits).</li>
+  </ul>
+  <p>
+    In total, it takes 8 bytes per 16 texels, or 4 bits per texel. This is <strong>6× smaller</strong>
+    than 24-bit RGB. A four-color palette is interpolated from the endpoints, and each texel stores the index
+    of its nearest palette color:
+  </p>
+  <div class="eq">
+    c<sub>2</sub> = (2c<sub>0</sub> + c<sub>1</sub>) / 3 &nbsp;&nbsp;&nbsp; c<sub>3</sub> = (c<sub>0</sub> + 2c<sub>1</sub>) / 3
+  </div>
+  <p>
+    When decoding, the <code>sample(u, v)</code> path decodes the image once and then
+    bilinearly samples it with the reader above, so S3TC is read exactly like every other representation.
+  </p>
+
+  <h3>Picking the endpoints</h3>
+  <p>
+    The endpoints dominate block quality, so I choose them per block in two steps:
+  </p>
+  <ol>
+    <li><strong>Principal color axis (PCA).</strong> Subtract the block mean, approximate the dominant
+      direction of variation with a few power iterations on the 3×3 covariance, project the 16 texels onto
+      that axis, and take the two extremes. This lines the palette up with the direction the block actually
+      varies in.</li>
+    <li><strong>Least-squares refit.</strong> Assign each texel to its nearest palette entry, then solve for
+      the endpoints that best reconstruct those colors. Palette entries are fixed blends of the endpoints
+      (<code>c2</code> and <code>c3</code> above), so each block is a tiny 2-variable least-squares problem
+      with a closed form. Repeat this assign-and-refit twice.</li>
+  </ol>
+  <p>
+    Flat blocks, where the fit is underdetermined, just keep their previous endpoints instead of dividing by a
+    near-zero determinant. Final endpoints are quantized to RGB565, and blocks are always written in the
+    4-color mode with the larger code first.
+  </p>
+
+  <h3>RGB565, and why the divide-by-levels shortcut isn't exact</h3>
+  <p>Each endpoint channel is quantized by multiplying by its level count, rounding, and dividing back:</p>
+  <pre><code>levels = (31, 63, 31)          # 5, 6, 5 bits for R, G, B
+q      = round(c * levels)     # integer 5-6-5 code
+c_hat  = q / levels            # back to [0, 1]</code></pre>
+  <p>
+    This is close to, but not exactly, how hardware maps a 5- or 6-bit code back to a value. Hardware
+    expands a code by <em>bit replication</em> into 8 bits, so the true value would be <code>round(q·255/31)/255</code>. The
+    shortcut implemented instead returns <code>q/31</code>. Since 255/31 isn't an
+    integer, bit replication lands on one of 256 fixed 8-bit levels, while <code>q/levels</code> can fall
+    between them. The difference is under a <code>1/255</code> step and both maps are
+    monotonic with the same half-step rounding error, so the difference is not significant.
+  </p>
+
+  <div class="callout">
+    <strong>Why does green get the extra bit?</strong> The 5-6-5 split puts six bits on green, one more than red
+    or blue. This is because green carries most of the human eye's perceived luminance (which is probably because 
+    sunlight is mostly green which is because green is between blue and red in terms of light wavelength). The Rec. 709 weights are about 0.21 R, 0.72 G,
+    0.07 B, so a green error is 3x as visible as the same error in red and 10x as
+    visible as one in blue. Spending the extra level on green therefore removes the most visible banding per bit. 
+    From what I've seen, every common 16-bit RGB layout favors green because of this.
+  </div>
+
+  <h3>Results</h3>
+  <p>
+    S3TC is fixed-ratio, so all three textures compress to exactly the same size. PSNR is measured on the
+    decoded image against the original, both normalized to <code>[0, 1]</code>, with
+    <code>PSNR = −10·log<sub>10</sub>(MSE)</code>.
+  </p>
+  <table>
+    <thead>
+      <tr><th>Texture</th><th class="num">PSNR (dB)</th><th class="num">S3TC size</th><th class="num">Original size</th><th class="num">Compression</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>gradient (smooth, low-frequency)</td><td class="num">42.89</td><td class="num">128 KB</td><td class="num">768 KB</td><td class="num">6.00× smaller</td></tr>
+      <tr><td>bricks (structured, sharp edges)</td><td class="num">41.39</td><td class="num">128 KB</td><td class="num">768 KB</td><td class="num">6.00× smaller</td></tr>
+      <tr><td>clouds (fractal, multi-scale)</td><td class="num">42.63</td><td class="num">128 KB</td><td class="num">768 KB</td><td class="num">6.00× smaller</td></tr>
+    </tbody>
+  </table>
+  <p class="meta">
+    "Compression" is raw size divided by compressed size (a 6× reduction); the compressed file is one sixth
+    of the original.
+  </p>
+
+  <figure>
+    <img src="assets/gradient_s3tc.png" alt="Original gradient texture (left) next to its S3TC reconstruction (right)">
+    <figcaption>Gradient: original (left) vs. S3TC (right), 42.89 dB. The smooth ramp is the hardest case for
+      a block format — the reconstruction shows faint block stepping.</figcaption>
+  </figure>
+
+  <figure>
+    <img src="assets/bricks_s3tc.png" alt="Original brick texture (left) next to its S3TC reconstruction (right)">
+    <figcaption>Bricks: original (left) vs. S3TC (right), 41.39 dB. Brick faces and mortar survive, but their
+      colors shift slightly inside each block.</figcaption>
+  </figure>
+
+  <figure>
+    <img src="assets/clouds_s3tc.png" alt="Original cloud texture (left) next to its S3TC reconstruction (right)">
+    <figcaption>Clouds: original (left) vs. S3TC (right), 42.63 dB. The soft, low-contrast detail mostly
+      survives, with subtle blocking.</figcaption>
+  </figure>
+
+  <h3>S3TC is sometimes not good</h3>
+  <p>
+    The clearest failure is smooth gradients. The crops below are 96×96 texels, nearest-neighbor upscaled 4×,
+    so each 4×4 block becomes a 16×16 square. Figures are regenerated by
+    <code>scripts/make_figures.py</code>.
+  </p>
+  <div class="grid3">
+    <figure>
+      <img src="assets/gradient_zoom.png" alt="4x zoom of the gradient, original (left) vs S3TC (right)">
+      <figcaption>Gradient: the original ramps smoothly; S3TC shows block-to-block banding.</figcaption>
+    </figure>
+    <figure>
+      <img src="assets/bricks_zoom.png" alt="4x zoom of the bricks, original (left) vs S3TC (right)">
+      <figcaption>Bricks: flat brick color picks up blocky shading from the palette fit.</figcaption>
+    </figure>
+    <figure>
+      <img src="assets/clouds_zoom.png" alt="4x zoom of the clouds, original (left) vs S3TC (right)">
+      <figcaption>Clouds: soft detail survives; faint blocking in low-contrast areas.</figcaption>
+    </figure>
+  </div>
+  <p>This behavior is because of the nature of S3TC and cannot really be improved. </p>
+  <ul>
+    <li>The palette is four points on the segment between
+      two endpoints. A smooth image varies in two dimensions inside a block, but the block can only represent
+      colors near that 1-D line, so the leftover error shows up as a color step at every block boundary, causing the
+      banding.</li>
+    <li>High-frequency detail that doesn't align with the 4×4
+      grid can't be represented; edges get smeared or stepped.</li>
+    <li>Every block costs the same 64 bits whether it's flat or
+      busy, and nothing is shared between blocks.</li>
+    <li>RGB565 rounds each endpoint to 5 or 6 bits before the palette is
+      even built, adding a second error source on top of the palette fit.</li>
+  </ul>
+  <p>
+    At this stage the baseline is 128 KB (6×) at roughly 41–43 dB. A learned representation
+    will replace the fixed palette with a shared feature grid plus an MLP, so its size will be tunable
+     instead of fixed. Because of this, I will compare them by matching size then comparing
+    PSNR and matching PSNR then comparing size. 
+  </p>
+
+  <h2>Log</h2>
+  <ul class="log">
+    <li><span class="date">2026-09-20</span>Project scaffold, environment, and CUDA setup. Bilinear sampler
+      with the shared read convention, verified against <code>grid_sample</code>. S3TC/DXT1 baseline with PCA
+      endpoints and least-squares refits; 6× fixed at ~41–43 dB. Figures and this page added.</li>
+  </ul>
+
+</main>
+</body>
+</html>

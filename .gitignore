@@ -12,5 +12,6 @@ runs/
 *.pth
 
 # Build artifacts
-*.pdf
 build/
+*.pdf
+!writeup/*.pdf

@@ -32,7 +32,7 @@ python scripts/check_env.py
 - `ntc/` (library): sampler, S3TC, feature grid, MLP, model, train, quantize, metrics
 - `scripts/`: runnable entry points + experiment drivers
 - `experiments/`: generated reconstructions, plots, metrics (not committed)
-- `writeup/`: report source + PDF
+- `writeup/`: running progression notes ([progression.html](writeup/progression.html), [progression.pdf](writeup/progression.pdf)) + final report source
 
 ## Reproducing results
 
@@ -41,4 +41,7 @@ python scripts/check_env.py
 - S3TC baseline: `python scripts/run_s3tc.py` (fixed 6:1)
   - bricks 41.4 dB, clouds 42.6 dB, gradient 42.9 dB (128 KB each vs 768 KB raw)
 - Tests: `python tests/test_sampler_s3tc.py`
+- Figures (writeup): `python scripts/make_figures.py`
+- Progression notes: [HTML](writeup/progression.html) · [PDF](writeup/progression.pdf)
+- Rebuild the PDF: `pip install -r requirements-docs.txt && python scripts/build_writeup.py`
 - Outputs in `experiments/` (not committed).

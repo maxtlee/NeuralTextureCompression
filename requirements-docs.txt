@@ -1,0 +1,4 @@
+# Optional: render the writeup HTML to PDF (scripts/build_writeup.py).
+# WeasyPrint needs system Pango/Cairo libraries, which are present on most
+# desktop Linux/macOS installs.
+weasyprint==70.0
