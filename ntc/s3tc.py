@@ -125,20 +125,11 @@ def _least_squares_endpoints(points, indices, fallback0, fallback1):
     return c0, c1
 
 
-def encode_blocks(texture: torch.Tensor, block: int = BLOCK, refine_iters: int = 2):
-    """Encode a texture into DXT1 blocks.
+def finalize_blocks(points, c0, c1):
+    """Quantize endpoints to RGB565, order into 4-color mode, assign indices.
 
-    Returns (code_hi, code_lo, indices):
-      code_hi, code_lo: (B,) RGB565 codes, first >= second (4-color mode)
-      indices: (B, block*block) values in {0, 1, 2, 3}
+    Returns the same (code_hi, code_lo, indices) triple as ``encode_blocks``.
     """
-    points = to_blocks(texture, block)
-    c0, c1 = _pca_endpoints(points)
-
-    for _ in range(refine_iters):
-        idx = _assign_indices(points, _palette(c0, c1))
-        c0, c1 = _least_squares_endpoints(points, idx, c0, c1)
-
     q0, c0q = quantize_rgb565(c0)
     q1, c1q = quantize_rgb565(c1)
     code0 = pack_rgb565(q0)
@@ -154,6 +145,23 @@ def encode_blocks(texture: torch.Tensor, block: int = BLOCK, refine_iters: int =
 
     indices = _assign_indices(points, _palette(endpoint_hi, endpoint_lo))
     return code_hi, code_lo, indices
+
+
+def encode_blocks(texture: torch.Tensor, block: int = BLOCK, refine_iters: int = 2):
+    """Encode a texture into DXT1 blocks.
+
+    Returns (code_hi, code_lo, indices):
+      code_hi, code_lo: (B,) RGB565 codes, first >= second (4-color mode)
+      indices: (B, block*block) values in {0, 1, 2, 3}
+    """
+    points = to_blocks(texture, block)
+    c0, c1 = _pca_endpoints(points)
+
+    for _ in range(refine_iters):
+        idx = _assign_indices(points, _palette(c0, c1))
+        c0, c1 = _least_squares_endpoints(points, idx, c0, c1)
+
+    return finalize_blocks(points, c0, c1)
 
 
 def decode_blocks(code_hi, code_lo, indices):

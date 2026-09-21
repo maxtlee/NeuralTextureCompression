@@ -220,7 +220,7 @@ c_hat  = q / levels            # back to [0, 1]</code></pre>
       <figcaption>Clouds: soft detail survives; faint blocking in low-contrast areas.</figcaption>
     </figure>
   </div>
-  <p>This behavior is because of the nature of S3TC and cannot really be improved. </p>
+  <p>This behavior is because of the nature of S3TC and cannot really be improved by the per-block fit alone. </p>
   <ul>
     <li>The palette is four points on the segment between
       two endpoints. A smooth image varies in two dimensions inside a block, but the block can only represent
@@ -240,11 +240,138 @@ c_hat  = q / levels            # back to [0, 1]</code></pre>
     PSNR and matching PSNR then comparing size. 
   </p>
 
+  <h2>Can the S3TC endpoint choice reduce the blocking issues?</h2>
+  <p>
+    The 4-colors-per-block limit is structural, but the baseline picks endpoints block by block
+    with no idea what its neighbors chose, so it leaves recoverable seam on the table. I kept the
+    bit budget and the decoder exactly the same and changed only how the endpoints are chosen,
+    trying three neighbor-aware or global approaches in increasing cost.
+  </p>
+
+  <h3>Seam metric</h3>
+  <p>
+    To measure how bad/visible seams were, I made a seam error metric. For every pair of adjacent texels straddling a block
+    boundary, compare the reconstruction's color step to the original's:
+  </p>
+  <div class="eq">e = mean | (rec[a] &minus; rec[b]) &minus; (orig[a] &minus; orig[b]) |</div>
+  <ul>
+    <li>Subtracting the original's own gradient means a perfect reconstruction scores 0 even on a
+      textured image, and only added discontinuities count.</li>
+    <li>Normalized color units, lower is better. It is not identical to perceived blocking, but it
+      should be well-correlated.</li>
+    <li>Baseline: gradient 0.00225, clouds 0.00690, bricks 0.00059.</li>
+    <li>There is a floor: RGB565 rounding alone contributes about half the seam. Encoding with
+      float endpoints drops the gradient seam from 0.00225 to 0.00119, so endpoint quantization is
+      a real part of the artifact.</li>
+  </ul>
+
+  <h3>Attempt 1: Block error diffusion</h3>
+  <ul>
+    <li><strong>Idea:</strong> a block's reconstruction error on its right and bottom edges is fed
+      forward into the target colors of the block to its right or below, before that block is fit,
+      so errors cancel across the seam instead of stacking up.</li>
+    <li><strong>Tuning Hyperparameters:</strong> the seam falls as alpha drops and bottoms out around 0.1 (mean
+      seam &times;0.94 across gradient and clouds); by 0.75 it adds seam instead of removing it. PSNR
+      moves the other way, rising with alpha until about 0.5 (+0.28 dB). It converges within two
+      passes, so I set alpha 0.1 and stop early.</li>
+    <li><strong>Results:</strong> gradient seam &minus;8% and +0.18 dB, clouds seam &minus;4% and
+      +0.14 dB.</li>
+  </ul>
+
+  <h3>Attempt 2: Boundary-weighted refit</h3>
+  <ul>
+    <li><strong>Idea:</strong> refit each block's edge texels toward
+      <code>neighbor_decoded + original_step</code>, so the block's step across the seam matches the
+      original's, and weight edge texels higher. This targets the seam metric directly.</li>
+    <li><strong>Tuning Hyperparameters:</strong> gamma 0.5 to 0.75 minimizes the seam (mean &times;0.91); raising
+      the boundary weight to 2 trims a little more but starts costing PSNR, so I leave it at 1.0. It
+      converges after one or two passes.</li>
+    <li><strong>Results:</strong> best seam on the gradient (&minus;13%) with a small PSNR gain. On
+      clouds it trims seam &minus;5% but gives up 0.1 dB.</li>
+  </ul>
+
+  <h3>Attempt 3: Seam-energy search (ICM)</h3>
+  <ul>
+    <li><strong>Idea:</strong> iterated conditional modes. Each block tries candidate endpoint pairs
+      (its current pair, the PCA extremes, the baseline least-squares fit, and blends toward each of
+      its four neighbors), decodes them, and keeps the one minimizing its own squared error plus
+      <code>lam &times; added-seam</code>.</li>
+    <li>The candidates are evaluated on the <em>quantized</em> decode, so the search also finds
+      endpoints that survive RGB565 rounding, which is why PSNR improves too.</li>
+    <li><strong>Tuning Hyperparameters:</strong> lam sets the trade-off. Low lam (0.1 to 0.5) maximizes PSNR
+      (+1.1 dB) while still cutting seam; lam 1 to 2 is the seam sweet spot (mean &times;0.885); lam
+      10 and above over-constrains the clouds and PSNR collapses. beta barely moves the seam but
+      higher values favor smooth textures (up to +2.3 dB on the gradient at beta 0.8) at a small cost
+      on clouds, so 0.5 stays balanced. Seam keeps improving out to 8 to 12 passes; 4 captures most
+      of it.</li>
+    <li><strong>Results:</strong> best overall. Gradient +1.34 dB and seam &minus;9%; clouds +0.16 dB
+      and seam &minus;14%.</li>
+  </ul>
+
+  <h3>Results</h3>
+  <table>
+    <thead>
+      <tr><th>Texture</th><th>Method</th><th class="num">PSNR (dB)</th><th class="num">Seam error</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>gradient</td><td>baseline</td><td class="num">42.89</td><td class="num">0.002247</td></tr>
+      <tr><td>gradient</td><td>diffusion</td><td class="num">43.07</td><td class="num">0.002072</td></tr>
+      <tr><td>gradient</td><td>boundary</td><td class="num">43.00</td><td class="num">0.001959</td></tr>
+      <tr><td>gradient</td><td>ICM</td><td class="num">44.23</td><td class="num">0.002046</td></tr>
+      <tr><td>clouds</td><td>baseline</td><td class="num">42.63</td><td class="num">0.006901</td></tr>
+      <tr><td>clouds</td><td>diffusion</td><td class="num">42.77</td><td class="num">0.006595</td></tr>
+      <tr><td>clouds</td><td>boundary</td><td class="num">42.53</td><td class="num">0.006575</td></tr>
+      <tr><td>clouds</td><td>ICM</td><td class="num">42.80</td><td class="num">0.005936</td></tr>
+      <tr><td>bricks</td><td>all methods</td><td class="num">41.39</td><td class="num">0.000585</td></tr>
+    </tbody>
+  </table>
+
+  <figure>
+    <img src="assets/s3tc_opt_seam.png" alt="Scatter plot of PSNR against seam error for each method and texture">
+    <figcaption>PSNR against seam error. Up and to the left is better. ICM (blue) is highest,
+      boundary (green) is leftmost on the gradient, and the clouds points sit furthest right
+      because that texture has the most seam to begin with.</figcaption>
+  </figure>
+
+  <figure>
+    <img src="assets/gradient_methods.png" alt="Gradient zoom: original, baseline, diffusion, boundary, ICM">
+    <figcaption>Gradient, 4x zoom. Left to right: original, baseline, diffusion, boundary, ICM.
+      The banding gets progressively less pronounced, most visibly in the ICM panel.</figcaption>
+  </figure>
+
+  <figure>
+    <img src="assets/clouds_methods.png" alt="Clouds zoom: original, baseline, diffusion, boundary, ICM">
+    <figcaption>Clouds, 4x zoom, same order. ICM removes most of the visible block structure in the
+      low-contrast areas.</figcaption>
+  </figure>
+
+  <p>Take aways</p>
+  <ul>
+    <li><strong>ICM (method 3) is the best all-rounder:</strong> the only method that improves PSNR on every
+      non-flat texture and cuts the seam the most on clouds, for a few passes of extra compute and
+      no change in stored size.</li>
+    <li><strong>Boundary refit (method 2) is the cheapest seam win</strong> and wins outright on the smooth
+      gradient, but it can trade a little PSNR for the seam on busier textures.</li>
+    <li><strong>Error diffusion (method 1) is a mild, safe nudge</strong> only at low strength.</li>
+    <li><strong>Bricks is unchanged by all three.</strong> Its blocks are flat, so the baseline
+      already has essentially no added step to fix. A useful sanity check that the methods only
+      touch recoverable seam.</li>
+    <li><strong>Quantization is the remaining floor.</strong> None of these remove the roughly half
+      of the seam that comes from RGB565 rounding. Coordinating the endpoint quantization itself, or
+      searching the RGB565 lattice globally, is probably the best next move to reduce blocking.</li>
+    <li>All of this is free in stored size: the representation is still exactly 8 bytes per block
+      (a fixed 6&times;), only the endpoint choice changed.</li>
+  </ul>
+
   <h2>Log</h2>
   <ul class="log">
     <li><span class="date">2026-09-20</span>Project scaffold, environment, and CUDA setup. Bilinear sampler
       with the shared read convention, verified against <code>grid_sample</code>. S3TC/DXT1 baseline with PCA
       endpoints and least-squares refits; 6× fixed at ~41–43 dB. Figures and this page added.</li>
+    <li><span class="date">2026-09-20</span>Added a cross-boundary seam metric and three seam-aware
+      endpoint-selection variants (block error diffusion, boundary-weighted refit, seam-energy ICM).
+      ICM improves PSNR and cuts the seam the most; boundary refit gives the best seam on smooth
+      gradients; error diffusion is a mild nudge. All keep the fixed 6× size.</li>
   </ul>
 
 </main>

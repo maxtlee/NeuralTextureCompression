@@ -31,6 +31,34 @@ def compression_factor(raw: int, compressed: int) -> float:
     return raw / compressed
 
 
+def seam_error(original: torch.Tensor, reconstruction: torch.Tensor,
+               block: int = 4) -> float:
+    """Cross-boundary gradient error, a measure of blocking artifacts.
+
+    Block compression creates color steps at block boundaries that are not in
+    the original. For every pair of adjacent texels that straddle a block
+    boundary, compare the reconstruction's color step to the original's:
+
+        e = mean | (rec[a] - rec[b]) - (orig[a] - orig[b]) |
+
+    Subtracting the original's own gradient means a perfect reconstruction
+    scores 0 even on a textured image, and only *added* discontinuities count.
+    Lower is better; units are normalized color in [0, 1].
+    """
+    height, width = original.shape[:2]
+    if height % block or width % block:
+        raise ValueError(f"texture {height}x{width} not divisible by {block}")
+
+    errors = []
+    for x in range(block, width, block):
+        errors.append(((reconstruction[:, x] - reconstruction[:, x - 1])
+                       - (original[:, x] - original[:, x - 1])).abs())
+    for y in range(block, height, block):
+        errors.append(((reconstruction[y] - reconstruction[y - 1])
+                       - (original[y] - original[y - 1])).abs())
+    return float(torch.cat([e.reshape(-1) for e in errors]).mean())
+
+
 def texel_centers(height: int, width: int, device=None, dtype=torch.float32):
     """All H*W texel-center coordinates (N, 2) in [0, 1].
 
