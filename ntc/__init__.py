@@ -4,6 +4,7 @@ from .device import get_device
 from .feature_grid import FeatureGrid
 from .io import load_image, save_image
 from .metrics import compression_factor, mse, psnr, raw_bytes, seam_error, texel_centers
+from .mlp import ColorMLP
 from .s3tc import S3TC
 from .s3tc_opt import S3TCOpt
 from .sampler import FullResSampler, sample_bilinear
@@ -21,6 +22,7 @@ __all__ = [
     "FullResSampler",
     "sample_bilinear",
     "FeatureGrid",
+    "ColorMLP",
     "S3TC",
     "S3TCOpt",
 ]

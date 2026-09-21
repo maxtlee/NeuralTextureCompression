@@ -43,7 +43,8 @@ python scripts/check_env.py
 - Seam metric + seam-aware S3TC: `python scripts/run_s3tc_optimizations.py`
 - Hyperparameter sweeps: `python scripts/sweep_s3tc_optimizations.py`
 - Feature grid: `python scripts/run_feature_grid.py`
-- Tests: `python tests/test_sampler_s3tc.py`, `python tests/test_s3tc_optimizations.py`, and `python tests/test_feature_grid.py`
+- Decoder MLP + combined sizes: `python scripts/run_color_mlp.py`
+- Tests: `python tests/test_sampler_s3tc.py`, `python tests/test_s3tc_optimizations.py`, `python tests/test_feature_grid.py`, and `python tests/test_color_mlp.py`
 - Figures (writeup): `python scripts/make_figures.py`
 - Progression notes: [HTML](writeup/progression.html) · [PDF](writeup/progression.pdf)
 - Rebuild the PDF: `pip install -r requirements-docs.txt && python scripts/build_writeup.py`
