@@ -1,6 +1,7 @@
-"""Neural texture compression: bilinear sampling and block compressors."""
+"""Neural texture compression: bilinear sampling, block compressors, feature grids."""
 
 from .device import get_device
+from .feature_grid import FeatureGrid
 from .io import load_image, save_image
 from .metrics import compression_factor, mse, psnr, raw_bytes, seam_error, texel_centers
 from .s3tc import S3TC
@@ -19,6 +20,7 @@ __all__ = [
     "texel_centers",
     "FullResSampler",
     "sample_bilinear",
+    "FeatureGrid",
     "S3TC",
     "S3TCOpt",
 ]

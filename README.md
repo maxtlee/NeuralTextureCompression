@@ -42,7 +42,8 @@ python scripts/check_env.py
   - bricks 41.4 dB, clouds 42.6 dB, gradient 42.9 dB (128 KB each vs 768 KB raw)
 - Seam metric + seam-aware S3TC: `python scripts/run_s3tc_optimizations.py`
 - Hyperparameter sweeps: `python scripts/sweep_s3tc_optimizations.py`
-- Tests: `python tests/test_sampler_s3tc.py` and `python tests/test_s3tc_optimizations.py`
+- Feature grid: `python scripts/run_feature_grid.py`
+- Tests: `python tests/test_sampler_s3tc.py`, `python tests/test_s3tc_optimizations.py`, and `python tests/test_feature_grid.py`
 - Figures (writeup): `python scripts/make_figures.py`
 - Progression notes: [HTML](writeup/progression.html) · [PDF](writeup/progression.pdf)
 - Rebuild the PDF: `pip install -r requirements-docs.txt && python scripts/build_writeup.py`
