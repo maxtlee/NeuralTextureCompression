@@ -5,6 +5,7 @@ from .feature_grid import FeatureGrid
 from .io import load_image, save_image
 from .metrics import compression_factor, mse, psnr, raw_bytes, seam_error, texel_centers
 from .mlp import ColorMLP
+from .model import MODEL_SIZES, NeuralTexture
 from .s3tc import S3TC
 from .s3tc_opt import S3TCOpt
 from .sampler import FullResSampler, sample_bilinear
@@ -23,6 +24,8 @@ __all__ = [
     "sample_bilinear",
     "FeatureGrid",
     "ColorMLP",
+    "NeuralTexture",
+    "MODEL_SIZES",
     "S3TC",
     "S3TCOpt",
 ]
