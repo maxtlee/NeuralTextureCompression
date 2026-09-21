@@ -57,14 +57,23 @@
         sampling code.</li>
       <li><strong>S3TC/DXT1 baseline: </strong> Classic 4×4 block compression from scratch. It gives a
         fixed 6× reduction and lands around 41–43 dB, which is the bar the learned version has to beat.</li>
+      <li><strong>Seam-aware S3TC: </strong> A cross-boundary seam metric plus three endpoint-selection
+        variants (error diffusion, boundary-weighted refit, seam-energy ICM). ICM also raises PSNR. All
+        keep the fixed 6×.</li>
+      <li><strong>Learned representation: </strong> A multi-resolution feature grid decoded by a small
+        MLP, fit per texture, with a training loop (fixed texel set, random minibatches, Adam). First
+        fit (small, gradient) reaches ~54–58 dB at 15.4×.</li>
     </ul>
     <p>
-      For easy comparision, both implementations are abstracted to expose the same <code>compress(texture)</code> / <code>sample(u, v)</code> interface.
+      The block methods share the same <code>compress(texture)</code> / <code>sample(u, v)</code>
+      interface; the learned model will be wrapped to match for the comparison.
     </p>
     <h3>To implement next</h3>
     <ul>
-      <li>A multi-resolution feature grid plus a decoder MLP, fit per texture, then
-        post-training 8-bit quantization.</li>
+      <li>Train all three sizes on all three textures, then plot PSNR against size with S3TC overlaid.</li>
+      <li>Post-training 8-bit quantization of the stored grid (and optionally the MLP).</li>
+      <li>Source a few textures of my own for the frequency/structure analysis.</li>
+      <li>Trim this progression doc into the final report.</li>
     </ul>
 
   <h2>The shared read convention</h2>
@@ -372,6 +381,56 @@ c_hat  = q / levels            # back to [0, 1]</code></pre>
       (a fixed 6&times;), only the endpoint choice changed.</li>
   </ul>
 
+  <h2>Neural representation</h2>
+  <p>
+    Instead of using a fixed palette as in S3TC, a multi-resolution feature grid
+    and MLP is used to turn blended features into an RGB color. 
+  </p>
+
+  <h3>Feature grid</h3>
+  <ul>
+    <li>One learnable <code>(1, feat_dim, R, R)</code> tensor per resolution (e.g. 16, 32, 64, 128).</li>
+    <li>A lookup bilinearly blends the four surrounding feature vectors and concatenates across
+      levels, so <code>L</code> levels of width <code>feat_dim</code> give <code>L &times; feat_dim</code>
+      channels. Coarse levels carry broad structure, fine levels carry detail.</li>
+    <li>The lookup uses the <em>same</em> texel-center convention as the full-resolution sampler
+      (<code>grid_sample</code>, <code>align_corners=False</code>, border clamping). A single 3-channel
+      level reproduces the sampler to 1e-7, so quality differences come from the representation, not
+      from how the texture is read.</li>
+  </ul>
+
+  <h3>Decoder</h3>
+  <ul>
+    <li>Two 64-wide ReLU hidden layers, then a sigmoid head for RGB in [0, 1].</li>
+    <li>The decoder is very small (about 4.5k to 5.4k weights) compared to the grid, 
+      so almost all of the storage costs for this representation come from the feature grid.</li>
+  </ul>
+
+  <h3>Training</h3>
+  <ul>
+    <li>The training set is every texel center of the image, and each step
+      draws a random 16,384-texel minibatch.</li>
+    <li>Trained via adaptive moment estimation (Adam) at 1e-2, 2000 steps, MSE loss. Minimizing loss also happens to be maximizing PSNR, since they are directly correlated with <code>PSNR = &minus;10&middot;log10(loss)</code>.</li>
+  </ul>
+
+  <h3>Sizes and a first fit</h3>
+  <table>
+    <thead>
+      <tr><th>Model</th><th>Levels</th><th class="num">feat_dim</th><th class="num">features</th><th class="num">params</th><th class="num">KB (f32)</th><th class="num">vs raw</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>small</td><td>(64)</td><td class="num">2</td><td class="num">2</td><td class="num">12,739</td><td class="num">49.8</td><td class="num">15.4×</td></tr>
+      <tr><td>medium</td><td>(16, 32, 64)</td><td class="num">2</td><td class="num">6</td><td class="num">15,555</td><td class="num">60.8</td><td class="num">12.6×</td></tr>
+      <tr><td>large</td><td>(16, 32, 64, 128)</td><td class="num">4</td><td class="num">16</td><td class="num">92,483</td><td class="num">361.3</td><td class="num">2.1×</td></tr>
+    </tbody>
+  </table>
+  <ul>
+    <li>The three sizes share the same decoder shape but have different feature grids.</li>
+    <li>I ran a first fit test with the small model. Training took around 9s and achieved 54 to 58 dB. For
+      reference, S3TC reaches 42.9 dB on the same texture at 3x the size, so the learned model seems to already beat
+      the baseline by a lot.</li>
+  </ul>
+
   <h2>Log</h2>
   <ul class="log">
     <li><span class="date">2026-09-20</span>Project scaffold, environment, and CUDA setup. Bilinear sampler
@@ -381,6 +440,9 @@ c_hat  = q / levels            # back to [0, 1]</code></pre>
       endpoint-selection variants (block error diffusion, boundary-weighted refit, seam-energy ICM).
       ICM improves PSNR and cuts the seam the most; boundary refit gives the best seam on smooth
       gradients; error diffusion is a mild nudge. All keep the fixed 6× size.</li>
+    <li><span class="date">2026-09-20</span>Added the learned representation: multi-resolution feature grid,
+      decoder MLP, and the training loop. First fit (small, gradient) reaches ~54–58 dB in ~9s at 15.4×,
+      versus S3TC's 42.9 dB at 6×.</li>
   </ul>
 
 </main>
