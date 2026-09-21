@@ -265,6 +265,15 @@ c_hat  = q / levels            # back to [0, 1]</code></pre>
       a real part of the artifact.</li>
   </ul>
 
+  <h3>Endpoint tuning</h3>
+  <ul>
+    <li>Instead of selecting endpoints from scratch using a new selection function, I first ran the local PCA-based 
+      S3TC endpoint selector (the standard one) and then created loss functions that took into account the blocking between a block's neighbors and 
+      ran gradient descent-like algorithms with these loss functions achieve incremental improvement. I experimented with a few different loss 
+      functions and ways of iterating through and incrementing endpoints. Some worked better than others. </li>
+  </ul>
+
+
   <h3>Attempt 1: Block error diffusion</h3>
   <ul>
     <li><strong>Idea:</strong> a block's reconstruction error on its right and bottom edges is fed
