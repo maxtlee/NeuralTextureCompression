@@ -1,6 +1,7 @@
 """Neural texture compression: bilinear sampling, block compressors, feature grids."""
 
 from .device import get_device
+from .codec import NeuralTextureCodec
 from .feature_grid import FeatureGrid
 from .io import load_image, save_image
 from .metrics import compression_factor, mse, psnr, raw_bytes, seam_error, texel_centers
@@ -26,6 +27,7 @@ __all__ = [
     "ColorMLP",
     "NeuralTexture",
     "MODEL_SIZES",
+    "NeuralTextureCodec",
     "S3TC",
     "S3TCOpt",
 ]

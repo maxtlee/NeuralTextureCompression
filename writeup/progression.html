@@ -61,16 +61,17 @@
         variants (error diffusion, boundary-weighted refit, seam-energy ICM). ICM also raises PSNR. All
         keep the fixed 6×.</li>
       <li><strong>Learned representation: </strong> A multi-resolution feature grid decoded by a small
-        MLP, fit per texture, with a training loop (fixed texel set, random minibatches, Adam). First
-        fit (small, gradient) reaches ~54–58 dB at 15.4×.</li>
+        MLP, fit per texture, with a training loop (fixed texel set, random minibatches, Adam).
+        Wrapped behind the same interface as the block methods.</li>
+      <li><strong>Full comparison: </strong> all three sizes on all three textures (five seeds each),
+        with PSNR-over-training and size-vs-quality plots and S3TC overlaid.</li>
     </ul>
     <p>
-      The block methods share the same <code>compress(texture)</code> / <code>sample(u, v)</code>
-      interface; the learned model will be wrapped to match for the comparison.
+      Every method now exposes the same <code>compress(texture)</code> / <code>sample(u, v)</code>
+      interface, so they can be compared on one size-vs-quality axis.
     </p>
     <h3>To implement next</h3>
     <ul>
-      <li>Train all three sizes on all three textures, then plot PSNR against size with S3TC overlaid.</li>
       <li>Post-training 8-bit quantization of the stored grid (and optionally the MLP).</li>
       <li>Source a few textures of my own for the frequency/structure analysis.</li>
       <li>Trim this progression doc into the final report.</li>
@@ -413,7 +414,7 @@ c_hat  = q / levels            # back to [0, 1]</code></pre>
     <li>Trained via adaptive moment estimation (Adam) at 1e-2, 2000 steps, MSE loss. Minimizing loss also happens to be maximizing PSNR, since they are directly correlated with <code>PSNR = &minus;10&middot;log10(loss)</code>.</li>
   </ul>
 
-  <h3>Sizes and a first fit</h3>
+  <h3>Sizes</h3>
   <table>
     <thead>
       <tr><th>Model</th><th>Levels</th><th class="num">feat_dim</th><th class="num">features</th><th class="num">params</th><th class="num">KB (f32)</th><th class="num">vs raw</th></tr>
@@ -426,9 +427,80 @@ c_hat  = q / levels            # back to [0, 1]</code></pre>
   </table>
   <ul>
     <li>The three sizes share the same decoder shape but have different feature grids.</li>
-    <li>I ran a first fit test with the small model. Training took around 9s and achieved 54 to 58 dB. For
-      reference, S3TC reaches 42.9 dB on the same texture at 3x the size, so the learned model seems to already beat
-      the baseline by a lot.</li>
+    <li>Storage is dominated by the grid, and even the small model is well under S3TC's fixed 6×.</li>
+  </ul>
+  <h2>Results</h2>
+
+  <h3>Size vs quality</h3>
+  <p>
+    All three architectures on each of the three textures, averaged over five seeds (GPU training
+    has a few dB of run-to-run spread). S3TC is the fixed 6× point at 128 KB.
+  </p>
+  <table>
+    <thead>
+      <tr><th>Texture</th><th>Model</th><th class="num">PSNR (dB)</th><th class="num">size</th><th class="num">ratio</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>gradient</td><td>small</td><td class="num">53.1 &plusmn; 4.0</td><td class="num">49.8 KB</td><td class="num">15.4×</td></tr>
+      <tr><td>gradient</td><td>medium</td><td class="num">53.9 &plusmn; 4.7</td><td class="num">60.8 KB</td><td class="num">12.6×</td></tr>
+      <tr><td>gradient</td><td>large</td><td class="num">58.3 &plusmn; 0.6</td><td class="num">361.3 KB</td><td class="num">2.1×</td></tr>
+      <tr><td>gradient</td><td>S3TC</td><td class="num">42.9</td><td class="num">128.0 KB</td><td class="num">6.0×</td></tr>
+      <tr><td>bricks</td><td>small</td><td class="num">32.3 &plusmn; 0.8</td><td class="num">49.8 KB</td><td class="num">15.4×</td></tr>
+      <tr><td>bricks</td><td>medium</td><td class="num">36.0 &plusmn; 0.5</td><td class="num">60.8 KB</td><td class="num">12.6×</td></tr>
+      <tr><td>bricks</td><td>large</td><td class="num">41.5 &plusmn; 1.6</td><td class="num">361.3 KB</td><td class="num">2.1×</td></tr>
+      <tr><td>bricks</td><td>S3TC</td><td class="num">41.4</td><td class="num">128.0 KB</td><td class="num">6.0×</td></tr>
+      <tr><td>clouds</td><td>small</td><td class="num">39.1 &plusmn; 0.5</td><td class="num">49.8 KB</td><td class="num">15.4×</td></tr>
+      <tr><td>clouds</td><td>medium</td><td class="num">41.0 &plusmn; 0.4</td><td class="num">60.8 KB</td><td class="num">12.6×</td></tr>
+      <tr><td>clouds</td><td>large</td><td class="num">48.8 &plusmn; 1.0</td><td class="num">361.3 KB</td><td class="num">2.1×</td></tr>
+      <tr><td>clouds</td><td>S3TC</td><td class="num">42.6</td><td class="num">128.0 KB</td><td class="num">6.0×</td></tr>
+    </tbody>
+  </table>
+
+  <figure>
+    <img src="assets/p6_training.png" alt="PSNR over training for all nine texture and architecture combinations">
+    <figcaption>PSNR over training for all nine combinations, mean of five seeds (shaded band is
+      min-max). The large model is both the best and the most stable; the small model saturates early.</figcaption>
+  </figure>
+
+  <figure>
+    <img src="assets/p6_size_quality.png" alt="PSNR against stored size for the neural models and S3TC">
+    <figcaption>Size vs quality. Color is the size or baseline (S3TC is black), marker shape is the
+      texture, and faint dots are the individual seeds. S3TC sits at a fixed 6×, 128 KB. Up and to the
+      left is better.</figcaption>
+  </figure>
+
+  <h3>Reconstructions</h3>
+  <figure>
+    <img src="assets/gradient_neural.png" alt="Gradient: original, small, medium, large">
+    <figcaption>Gradient: original, then small, medium, large.</figcaption>
+  </figure>
+  <figure>
+    <img src="assets/bricks_neural.png" alt="Bricks: original, small, medium, large">
+    <figcaption>Bricks: original, then small, medium, large. The small model smears the mortar
+      lines; large resolves them.</figcaption>
+  </figure>
+  <figure>
+    <img src="assets/clouds_neural.png" alt="Clouds: original, small, medium, large">
+    <figcaption>Clouds: original, then small, medium, large. Fine multi-scale detail only appears at
+      the large size.</figcaption>
+  </figure>
+
+  <h3>Which architecture wins, and does it beat S3TC?</h3>
+  <ul>
+    <li><strong>Gradient: </strong> all three beat S3TC by 10 dB or more, and the small model is
+      smaller than S3TC while doing it, so the neural model dominates outright. Large is the best
+      (58.3 dB) and the most stable; small and medium occasionally stall at 46 to 50 dB on an
+      unlucky seed even though the texture is easy.</li>
+    <li><strong>Bricks: </strong> large is the only size that beats S3TC (41.4 dB), but it takes 3x the 
+      memory of S3TC. I would say the data is inconclusive for determining which performs better or worse 
+      here, but it makes sense that S3TC is more efficient than a learned continuous representation for encoding very binary textures.</li>
+    <li><strong>Clouds: </strong> large wins by a wide margin (48.8 dB vs 41.0 for medium), since
+      only it has both coarse and fine levels plus enough features for the fractal detail. Similarly to bricks, only
+      large beats S3TC (42.6 dB).</li>
+    <li><strong>Beat S3TC? </strong> Gradient: yes. Bricks and clouds: only the large model
+      beats S3TC on PSNR, but it is 3x as large as S3TC. Small and medium have better
+      ratios (15.4× and 12.6×) but worse quality, so for the structured and fractal textures
+      the two methods do not have a clear winner.</li>
   </ul>
 
   <h2>Log</h2>
@@ -443,6 +515,10 @@ c_hat  = q / levels            # back to [0, 1]</code></pre>
     <li><span class="date">2026-09-20</span>Added the learned representation: multi-resolution feature grid,
       decoder MLP, and the training loop. First fit (small, gradient) reaches ~54–58 dB in ~9s at 15.4×,
       versus S3TC's 42.9 dB at 6×.</li>
+    <li><span class="date">2026-09-20</span>Full comparison done: 3 sizes × 3 textures × 5 seeds. The
+      neural model wins outright on the smooth gradient (small beats S3TC at a quarter of the size);
+      on bricks and clouds only the large model beats S3TC on PSNR, at 2.1× versus 6×. Added the
+      PSNR-vs-size and training-curve plots and the per-texture reconstructions.</li>
   </ul>
 
 </main>
