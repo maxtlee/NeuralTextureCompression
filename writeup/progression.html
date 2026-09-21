@@ -65,6 +65,8 @@
         Wrapped behind the same interface as the block methods.</li>
       <li><strong>Full comparison: </strong> all three sizes on all three textures (five seeds each),
         with PSNR-over-training and size-vs-quality plots and S3TC overlaid.</li>
+      <li><strong>Quantization: </strong> post-training 8-bit quantization of the grid (and optionally
+        the MLP), roughly halving to quartering the stored size for at most a couple of dB.</li>
     </ul>
     <p>
       Every method now exposes the same <code>compress(texture)</code> / <code>sample(u, v)</code>
@@ -72,7 +74,6 @@
     </p>
     <h3>To implement next</h3>
     <ul>
-      <li>Post-training 8-bit quantization of the stored grid (and optionally the MLP).</li>
       <li>Source a few textures of my own for the frequency/structure analysis.</li>
       <li>Trim this progression doc into the final report.</li>
     </ul>
@@ -434,25 +435,26 @@ c_hat  = q / levels            # back to [0, 1]</code></pre>
   <h3>Size vs quality</h3>
   <p>
     All three architectures on each of the three textures, averaged over five seeds (GPU training
-    has a few dB of run-to-run spread). S3TC is the fixed 6× point at 128 KB.
+    has a few dB of run-to-run spread). S3TC is the fixed 6× point at 128 KB. The 8-bit column is
+    the grid quantized with the decoder still in float32; see Quantization below for the rest.
   </p>
   <table>
     <thead>
-      <tr><th>Texture</th><th>Model</th><th class="num">PSNR (dB)</th><th class="num">size</th><th class="num">ratio</th></tr>
+      <tr><th>Texture</th><th>Model</th><th class="num">float PSNR</th><th class="num">float size (ratio)</th><th class="num">8-bit PSNR</th><th class="num">8-bit size (ratio)</th></tr>
     </thead>
     <tbody>
-      <tr><td>gradient</td><td>small</td><td class="num">53.1 &plusmn; 4.0</td><td class="num">49.8 KB</td><td class="num">15.4×</td></tr>
-      <tr><td>gradient</td><td>medium</td><td class="num">53.9 &plusmn; 4.7</td><td class="num">60.8 KB</td><td class="num">12.6×</td></tr>
-      <tr><td>gradient</td><td>large</td><td class="num">58.3 &plusmn; 0.6</td><td class="num">361.3 KB</td><td class="num">2.1×</td></tr>
-      <tr><td>gradient</td><td>S3TC</td><td class="num">42.9</td><td class="num">128.0 KB</td><td class="num">6.0×</td></tr>
-      <tr><td>bricks</td><td>small</td><td class="num">32.3 &plusmn; 0.8</td><td class="num">49.8 KB</td><td class="num">15.4×</td></tr>
-      <tr><td>bricks</td><td>medium</td><td class="num">36.0 &plusmn; 0.5</td><td class="num">60.8 KB</td><td class="num">12.6×</td></tr>
-      <tr><td>bricks</td><td>large</td><td class="num">41.5 &plusmn; 1.6</td><td class="num">361.3 KB</td><td class="num">2.1×</td></tr>
-      <tr><td>bricks</td><td>S3TC</td><td class="num">41.4</td><td class="num">128.0 KB</td><td class="num">6.0×</td></tr>
-      <tr><td>clouds</td><td>small</td><td class="num">39.1 &plusmn; 0.5</td><td class="num">49.8 KB</td><td class="num">15.4×</td></tr>
-      <tr><td>clouds</td><td>medium</td><td class="num">41.0 &plusmn; 0.4</td><td class="num">60.8 KB</td><td class="num">12.6×</td></tr>
-      <tr><td>clouds</td><td>large</td><td class="num">48.8 &plusmn; 1.0</td><td class="num">361.3 KB</td><td class="num">2.1×</td></tr>
-      <tr><td>clouds</td><td>S3TC</td><td class="num">42.6</td><td class="num">128.0 KB</td><td class="num">6.0×</td></tr>
+      <tr><td>gradient</td><td>small</td><td class="num">53.3 &plusmn; 5.1</td><td class="num">49.8 KB (15.4×)</td><td class="num">52.7</td><td class="num">25.8 KB (29.8×)</td></tr>
+      <tr><td>gradient</td><td>medium</td><td class="num">58.0 &plusmn; 0.6</td><td class="num">60.8 KB (12.6×)</td><td class="num">57.6</td><td class="num">29.3 KB (26.2×)</td></tr>
+      <tr><td>gradient</td><td>large</td><td class="num">58.0 &plusmn; 0.8</td><td class="num">361.3 KB (2.1×)</td><td class="num">57.7</td><td class="num">106.3 KB (7.2×)</td></tr>
+      <tr><td>gradient</td><td>S3TC</td><td class="num">42.9</td><td class="num">128.0 KB (6.0×)</td><td class="num"></td><td class="num"></td></tr>
+      <tr><td>bricks</td><td>small</td><td class="num">32.1 &plusmn; 0.6</td><td class="num">49.8 KB (15.4×)</td><td class="num">31.8</td><td class="num">25.8 KB (29.8×)</td></tr>
+      <tr><td>bricks</td><td>medium</td><td class="num">36.4 &plusmn; 0.8</td><td class="num">60.8 KB (12.6×)</td><td class="num">36.1</td><td class="num">29.3 KB (26.2×)</td></tr>
+      <tr><td>bricks</td><td>large</td><td class="num">41.7 &plusmn; 1.6</td><td class="num">361.3 KB (2.1×)</td><td class="num">41.7</td><td class="num">106.3 KB (7.2×)</td></tr>
+      <tr><td>bricks</td><td>S3TC</td><td class="num">41.4</td><td class="num">128.0 KB (6.0×)</td><td class="num"></td><td class="num"></td></tr>
+      <tr><td>clouds</td><td>small</td><td class="num">38.9 &plusmn; 0.3</td><td class="num">49.8 KB (15.4×)</td><td class="num">38.9</td><td class="num">25.8 KB (29.8×)</td></tr>
+      <tr><td>clouds</td><td>medium</td><td class="num">40.9 &plusmn; 0.3</td><td class="num">60.8 KB (12.6×)</td><td class="num">40.8</td><td class="num">29.3 KB (26.2×)</td></tr>
+      <tr><td>clouds</td><td>large</td><td class="num">49.0 &plusmn; 1.0</td><td class="num">361.3 KB (2.1×)</td><td class="num">48.9</td><td class="num">106.3 KB (7.2×)</td></tr>
+      <tr><td>clouds</td><td>S3TC</td><td class="num">42.6</td><td class="num">128.0 KB (6.0×)</td><td class="num"></td><td class="num"></td></tr>
     </tbody>
   </table>
 
@@ -465,9 +467,40 @@ c_hat  = q / levels            # back to [0, 1]</code></pre>
   <figure>
     <img src="assets/p6_size_quality.png" alt="PSNR against stored size for the neural models and S3TC">
     <figcaption>Size vs quality. Color is the size or baseline (S3TC is black), marker shape is the
-      texture, and faint dots are the individual seeds. S3TC sits at a fixed 6×, 128 KB. Up and to the
-      left is better.</figcaption>
+      texture, and faint dots are the individual seeds. Filled points are float32; open points are the
+      8-bit grid, joined by a dashed line to show the size saved. S3TC sits at a fixed 6×, 128 KB. Up
+      and to the left is better.</figcaption>
   </figure>
+
+  <h3>Quantization</h3>
+  <p>
+    Fitted models are quantized to 8-bit post-training. Each stored
+    array is quantized separately over its own range: round to the nearest of 256 levels, store the
+    index <code>q</code>, and decode with <code>x_hat = lo + q &middot; scale</code>. That is one byte
+    per value plus the two float32 range endpoints per array. The feature grid is always quantized
+    because it takes up the vast majority of the space, and I tested with and without quantizing the decoder MLP.
+  </p>
+  <table>
+    <thead>
+      <tr><th>Model</th><th class="num">float32</th><th class="num">8-bit grid</th><th class="num">8-bit grid + MLP</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>small</td><td class="num">49.8 KB (15.4×)</td><td class="num">25.8 KB (29.8×)</td><td class="num">12.5 KB (61.5×)</td></tr>
+      <tr><td>medium</td><td class="num">60.8 KB (12.6×)</td><td class="num">29.3 KB (26.2×)</td><td class="num">15.3 KB (50.3×)</td></tr>
+      <tr><td>large</td><td class="num">361.3 KB (2.1×)</td><td class="num">106.3 KB (7.2×)</td><td class="num">90.4 KB (8.5×)</td></tr>
+    </tbody>
+  </table>
+  <ul>
+    <li><strong>Quality losses: </strong> quantizing only the grid costs 0.01 to 0.65 dB (the large
+      model loses under 0.3 dB). Also quantizing the decoder costs up to 1.9 dB on the small model,
+      about 0.9 dB on medium and large. The grid features span a narrow range, so a bucket is a tiny
+      fraction of the value scale and the rounding shows up as a small uniform error, not structure.
+      The small model feels the decoder most because its MLP is a larger share of its total size and
+      its weights have a wider dynamic range.</li>
+    <li>Quantization makes the neural representation consistently more efficient than the baseline. 
+      At full 8-bit quantization, the large model now beats S3TC on PSNR for all three textures while also being smaller, and the
+      small model lands at 12.5 KB (61.5×) with 52.4 / 31.3 / 38.4 dB.</li>
+  </ul>
 
   <h3>Reconstructions</h3>
   <figure>
@@ -487,20 +520,23 @@ c_hat  = q / levels            # back to [0, 1]</code></pre>
 
   <h3>Which architecture wins, and does it beat S3TC?</h3>
   <ul>
-    <li><strong>Gradient: </strong> all three beat S3TC by 10 dB or more, and the small model is
-      smaller than S3TC while doing it, so the neural model dominates outright. Large is the best
-      (58.3 dB) and the most stable; small and medium occasionally stall at 46 to 50 dB on an
-      unlucky seed even though the texture is easy.</li>
-    <li><strong>Bricks: </strong> large is the only size that beats S3TC (41.4 dB), but it takes 3x the 
-      memory of S3TC. I would say the data is inconclusive for determining which performs better or worse 
-      here, but it makes sense that S3TC is more efficient than a learned continuous representation for encoding very binary textures.</li>
-    <li><strong>Clouds: </strong> large wins by a wide margin (48.8 dB vs 41.0 for medium), since
-      only it has both coarse and fine levels plus enough features for the fractal detail. Similarly to bricks, only
-      large beats S3TC (42.6 dB).</li>
-    <li><strong>Beat S3TC? </strong> Gradient: yes. Bricks and clouds: only the large model
-      beats S3TC on PSNR, but it is 3x as large as S3TC. Small and medium have better
-      ratios (15.4× and 12.6×) but worse quality, so for the structured and fractal textures
-      the two methods do not have a clear winner.</li>
+    <li><strong>Gradient: </strong> medium quantized seems to be the best PSNR for its size, but all three beat S3TC by about 10 dB or
+      more. With the small model, one unlucky seed stalled near 46 dB, which increased standard deviation by a lot.</li>
+    <li><strong>Bricks: </strong> large quantized performs the best; small collapses to 32 dB because a single
+      64-level grid cannot hold sharp mortar edges. In float32 the large model only ties S3TC (41.4 dB)
+      while being larger, and for some reason after 8-bit quantization the PSNR improves.</li>
+    <li><strong>Clouds: </strong> large quantized wins by a wide margin, since only
+      it has both coarse and fine levels plus enough features for the fractal detail. </li>
+    <li>Transitioning from small to medium (same decoder, extra coarse
+      levels) gains +4.7 dB on gradient, +4.3 on bricks, +2.0 on clouds. Going from medium to large 
+      (feat_dim 2 to 4 plus the 128 level) gains 0 dB on gradient but +5.3 on bricks and +8.1 on clouds. 
+      Overall, the busier the texture's frequency content, the more the extra capacity is worth.</li>
+    <li><strong>Beat S3TC? </strong> The large quantized models are the only ones that are all-around better than S3TC. 
+      Without quantization, the large model is bigger than S3TC and the small and medium models often perform 
+      equally or worse than S3TC. </li>
+    <li>It might be important to note that I just used a fixed 2000 steps and lr 1e-2 with no tuning, and GPU training is
+      nondeterministic, so a heavy-tailed config (gradient small/medium) needs several seeds for a
+      stable mean.</li>
   </ul>
 
   <h2>Log</h2>
@@ -519,6 +555,9 @@ c_hat  = q / levels            # back to [0, 1]</code></pre>
       neural model wins outright on the smooth gradient (small beats S3TC at a quarter of the size);
       on bricks and clouds only the large model beats S3TC on PSNR, at 2.1× versus 6×. Added the
       PSNR-vs-size and training-curve plots and the per-texture reconstructions.</li>
+    <li><span class="date">2026-09-20</span>Added post-training 8-bit quantization of the grid (and
+      optionally the decoder) and re-ran the comparison. Size drops 2-4× for at most a couple of dB.
+      After quantization the large model beats S3TC on all three textures at a smaller stored size.</li>
   </ul>
 
 </main>

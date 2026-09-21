@@ -35,6 +35,7 @@ sys.path.insert(0, str(ROOT))
 
 from ntc import S3TC, get_device, load_image, psnr, raw_bytes, save_image  # noqa: E402
 from ntc.codec import NeuralTextureCodec  # noqa: E402
+from ntc.quantize import quantize_model, quantized_size_bytes  # noqa: E402
 from ntc.viz import hstack  # noqa: E402
 
 TEXTURES = ["gradient", "bricks", "clouds"]
@@ -64,31 +65,55 @@ def run_experiments(args, seeds, device):
         }
 
         panels = [texture]
+        raw = raw_bytes(height, width)
         for size in SIZES:
-            scores, history, shown = [], [], None
+            scores, hidden, shown = [], [], None
+            q_grid_scores, q_all_scores = [], []
             for seed in seeds:
                 codec = NeuralTextureCodec(size=size, steps=args.steps, batch=args.batch,
                                            lr=args.lr, seed=seed, log_every=100)
                 codec.compress(texture)
                 recon = codec.decode()
                 scores.append(psnr(texture, recon))
-                history.append([h["psnr"] for h in codec.history])
+                hidden.append([h["psnr"] for h in codec.history])
                 if seed == seeds[0]:
                     shown = recon
                     size_bytes, params = codec.size_bytes, codec.num_parameters
+
+                state = {k: v.detach().clone() for k, v in codec.model.state_dict().items()}
+                quantize_model(codec.model, quantize_mlp=False)
+                q_grid_scores.append(psnr(texture, codec.decode()))
+                q_grid_bytes = quantized_size_bytes(codec.model, quantize_mlp=False)
+                codec.model.load_state_dict(state)
+                quantize_model(codec.model, quantize_mlp=True)
+                q_all_scores.append(psnr(texture, codec.decode()))
+                q_all_bytes = quantized_size_bytes(codec.model, quantize_mlp=True)
+                codec.model.load_state_dict(state)
             panels.append(shown)
-            curves.setdefault(texture_name, {})[size] = history
-            runs.append({
+            curves.setdefault(texture_name, {})[size] = hidden
+            entry = {
                 "texture": texture_name, "size": size, "params": params,
-                "size_bytes": size_bytes, "raw_bytes": raw_bytes(height, width),
-                "compression_factor": raw_bytes(height, width) / size_bytes,
+                "size_bytes": size_bytes, "raw_bytes": raw,
+                "compression_factor": raw / size_bytes,
                 "psnr_mean": statistics.mean(scores),
                 "psnr_std": statistics.stdev(scores) if len(scores) > 1 else 0.0,
                 "psnr_seeds": scores,
-            })
-            print(f"  {texture_name:9s} {size:7s} PSNR {runs[-1]['psnr_mean']:6.2f} "
-                  f"+/- {runs[-1]['psnr_std']:.2f}  {size_bytes / 1024:6.1f} KB  "
-                  f"{runs[-1]['compression_factor']:.1f}x")
+                "quant_grid_mean": statistics.mean(q_grid_scores),
+                "quant_grid_std": statistics.stdev(q_grid_scores) if len(q_grid_scores) > 1 else 0.0,
+                "quant_grid_seeds": q_grid_scores,
+                "quant_grid_bytes": q_grid_bytes,
+                "quant_grid_factor": raw / q_grid_bytes,
+                "quant_all_mean": statistics.mean(q_all_scores),
+                "quant_all_std": statistics.stdev(q_all_scores) if len(q_all_scores) > 1 else 0.0,
+                "quant_all_seeds": q_all_scores,
+                "quant_all_bytes": q_all_bytes,
+                "quant_all_factor": raw / q_all_bytes,
+            }
+            runs.append(entry)
+            print(f"  {texture_name:9s} {size:7s} "
+                  f"float {entry['psnr_mean']:6.2f} {size_bytes/1024:6.1f}KB | "
+                  f"8bit-grid {entry['quant_grid_mean']:6.2f} {q_grid_bytes/1024:5.1f}KB {entry['quant_grid_factor']:5.1f}x | "
+                  f"8bit-all {entry['quant_all_mean']:6.2f} {q_all_bytes/1024:5.1f}KB {entry['quant_all_factor']:5.1f}x")
 
         save_image(hstack(panels, gap=6), ASSETS / f"{texture_name}_neural.png")
 
@@ -131,6 +156,14 @@ def plot_size_quality(payload):
                     marker=TEXTURE_MARKER[entry["texture"]], color=SIZE_COLOR[entry["size"]],
                     linestyle="", capsize=2, markersize=6,
                     markeredgecolor="white", markeredgewidth=0.6, zorder=4)
+        # The 8-bit grid point, connected to its float counterpart.
+        ax.plot([entry["size_bytes"] / 1024, entry["quant_grid_bytes"] / 1024],
+                [entry["psnr_mean"], entry["quant_grid_mean"]],
+                color=SIZE_COLOR[entry["size"]], linestyle="--", linewidth=0.8, alpha=0.7, zorder=2)
+        ax.errorbar(entry["quant_grid_bytes"] / 1024, entry["quant_grid_mean"],
+                    yerr=entry["quant_grid_std"], marker=TEXTURE_MARKER[entry["texture"]],
+                    color=SIZE_COLOR[entry["size"]], markerfacecolor="white",
+                    linestyle="", capsize=2, markersize=6, markeredgewidth=1.1, zorder=4)
     for texture_name, base in payload["baseline_s3tc"].items():
         ax.scatter(base["size_bytes"] / 1024, base["psnr_db"],
                    marker=TEXTURE_MARKER[texture_name], color="#111111", s=55,
@@ -143,10 +176,13 @@ def plot_size_quality(payload):
                                   markeredgecolor="#444444", markeredgewidth=1.1, markersize=8,
                                   label=t)
                        for t, m in TEXTURE_MARKER.items()]
+    texture_handles.append(plt.Line2D([], [], marker="o", linestyle="--", color="#666666",
+                                      markerfacecolor="white", markeredgecolor="#666666",
+                                      markersize=8, linewidth=0.8, label="8-bit grid"))
     leg_size = ax.legend(handles=size_handles, title="size / baseline", loc="lower center",
                          ncol=4, fontsize=8, frameon=False)
     ax.add_artist(leg_size)
-    ax.legend(handles=texture_handles, title="texture", loc="upper center", ncol=3,
+    ax.legend(handles=texture_handles, title="texture / precision", loc="upper center", ncol=4,
               fontsize=8, frameon=False)
     ax.set_xscale("log")
     ax.set_xlabel("stored size (KB, log scale, lower is better)")

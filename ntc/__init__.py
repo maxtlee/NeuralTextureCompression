@@ -7,6 +7,7 @@ from .io import load_image, save_image
 from .metrics import compression_factor, mse, psnr, raw_bytes, seam_error, texel_centers
 from .mlp import ColorMLP
 from .model import MODEL_SIZES, NeuralTexture
+from .quantize import quantize_model, quantize_uint8, quantized_size_bytes
 from .s3tc import S3TC
 from .s3tc_opt import S3TCOpt
 from .sampler import FullResSampler, sample_bilinear
@@ -28,6 +29,9 @@ __all__ = [
     "NeuralTexture",
     "MODEL_SIZES",
     "NeuralTextureCodec",
+    "quantize_uint8",
+    "quantize_model",
+    "quantized_size_bytes",
     "S3TC",
     "S3TCOpt",
 ]
