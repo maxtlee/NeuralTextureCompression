@@ -44,7 +44,7 @@
   <div class="kicker">Neural Texture Compression</div>
   <h1>Progression notes</h1>
   <p class="meta">
-    Working log — last updated 2026-09-20. For the project overview, setup, and run commands,
+    Working log — last updated 2026-09-22. For the project overview, setup, and run commands,
     see the <a href="../README.md">README</a>. I add to this page as the project grows; the final
     report will be a trimmed subset of it.
   </p>
@@ -656,17 +656,17 @@ c_hat  = q / levels            # back to [0, 1]</code></pre>
       endpoint-selection variants (block error diffusion, boundary-weighted refit, seam-energy ICM).
       ICM improves PSNR and cuts the seam the most; boundary refit gives the best seam on smooth
       gradients; error diffusion is a mild nudge. All keep the fixed 6× size.</li>
-    <li><span class="date">2026-09-20</span>Added the learned representation: multi-resolution feature grid,
+    <li><span class="date">2026-09-21</span>Added the learned representation: multi-resolution feature grid,
       decoder MLP, and the training loop. First fit (small, gradient) reaches ~54–58 dB in ~9s at 15.4×,
       versus S3TC's 42.9 dB at 6×.</li>
-    <li><span class="date">2026-09-20</span>Full comparison done: 3 sizes × 3 textures × 5 seeds. The
+    <li><span class="date">2026-09-21</span>Full comparison done: 3 sizes × 3 textures × 5 seeds. The
       neural model wins outright on the smooth gradient (small beats S3TC at a quarter of the size);
       on bricks and clouds only the large model beats S3TC on PSNR, at 2.1× versus 6×. Added the
       PSNR-vs-size and training-curve plots and the per-texture reconstructions.</li>
-    <li><span class="date">2026-09-20</span>Added post-training 8-bit quantization of the grid (and
+    <li><span class="date">2026-09-21</span>Added post-training 8-bit quantization of the grid (and
       optionally the decoder) and re-ran the comparison. Size drops 2-4× for at most a couple of dB.
       After quantization the large model beats S3TC on all three textures at a smaller stored size.</li>
-    <li><span class="date">2026-09-20</span>Sourced eight CC0 textures (ambientCG) spanning frequency
+    <li><span class="date">2026-09-21</span>Sourced eight CC0 textures (ambientCG) spanning frequency
       content and added them to the provided set. S3TC beats the neural model on all eight, and the gap
       grows with detail; the starter textures were unusually smooth (detail 0.006–0.051 vs 0.036–0.477).
       Wrote up fabric (high-frequency failure), marble (resolution-limited), and concrete (even the
