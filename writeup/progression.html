@@ -67,6 +67,9 @@
         with PSNR-over-training and size-vs-quality plots and S3TC overlaid.</li>
       <li><strong>Quantization: </strong> post-training 8-bit quantization of the grid (and optionally
         the MLP), roughly halving to quartering the stored size for at most a couple of dB.</li>
+      <li><strong>Sourced textures: </strong> eight CC0 textures from ambientCG spanning frequency
+        content, tested with all three sizes and S3TC. S3TC wins on every one, and the gap grows with
+        high-frequency detail; the three most interesting cases are analyzed below.</li>
     </ul>
     <p>
       Every method now exposes the same <code>compress(texture)</code> / <code>sample(u, v)</code>
@@ -74,7 +77,6 @@
     </p>
     <h3>To implement next</h3>
     <ul>
-      <li>Source a few textures of my own for the frequency/structure analysis.</li>
       <li>Trim this progression doc into the final report.</li>
     </ul>
 
@@ -539,6 +541,112 @@ c_hat  = q / levels            # back to [0, 1]</code></pre>
       stable mean.</li>
   </ul>
 
+  <h2>Sourced textures</h2>
+  <p>
+    The three starter textures turned out to be unusually smooth, so I sourced eight more from
+    ambientCG (all CC0, credited in <code>assets/own/CREDITS.md</code>) with deliberately different
+    frequency content and structure: fine stochastic detail (gravel, grass), a fine repetitive weave
+    (fabric), smooth low-contrast (concrete), directional grain (wood), sparse strong veins (marble),
+    multi-scale natural (rock), and structured sharp edges (paving).
+  </p>
+  <p>
+    To measure frequency content I used the mean absolute Laplacian of the
+    grayscale image, where a higher value means more high-frequency energy. The starter textures scores are 
+    0.006 for the gradient, 0.008 for the clouds, and 0.051 for the bricks, while the sourced set spans from 0.036 to 
+    0.477, meaning the new textures have a lot more high-frequency detail.
+  </p>
+
+  <figure>
+    <img src="assets/own_grid.png" alt="Grid of the eight sourced textures">
+    <figcaption>Top row: gravel, grass, concrete, wood. Bottom row: marble, fabric, rock, paving.</figcaption>
+  </figure>
+
+  <h3>Results</h3>
+  <p>
+    All of the representation sizes are the same as previous tests. I didn't bother quantizing 
+    the learned models since their accuracy was already not good enough to beat PSNR. 
+  </p>
+  <table>
+    <thead>
+      <tr><th>Texture</th><th class="num">detail</th><th class="num">S3TC</th><th class="num">small</th><th class="num">medium</th><th class="num">large</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>concrete</td><td class="num">0.036</td><td class="num">44.0</td><td class="num">37.4</td><td class="num">37.7</td><td class="num">40.7</td></tr>
+      <tr><td>wood</td><td class="num">0.112</td><td class="num">36.9</td><td class="num">27.0</td><td class="num">27.3</td><td class="num">31.2</td></tr>
+      <tr><td>rock</td><td class="num">0.113</td><td class="num">36.3</td><td class="num">26.5</td><td class="num">26.8</td><td class="num">30.6</td></tr>
+      <tr><td>marble</td><td class="num">0.124</td><td class="num">35.2</td><td class="num">24.3</td><td class="num">24.5</td><td class="num">30.0</td></tr>
+      <tr><td>paving</td><td class="num">0.139</td><td class="num">32.4</td><td class="num">23.9</td><td class="num">24.5</td><td class="num">28.2</td></tr>
+      <tr><td>grass</td><td class="num">0.138</td><td class="num">30.6</td><td class="num">23.2</td><td class="num">23.5</td><td class="num">27.0</td></tr>
+      <tr><td>gravel</td><td class="num">0.178</td><td class="num">29.4</td><td class="num">22.7</td><td class="num">23.0</td><td class="num">25.7</td></tr>
+      <tr><td>fabric</td><td class="num">0.477</td><td class="num">32.1</td><td class="num">18.3</td><td class="num">18.3</td><td class="num">20.4</td></tr>
+    </tbody>
+  </table>
+
+  <figure>
+    <img src="assets/own_size_quality.png" alt="Size vs quality for the eight sourced textures">
+    <figcaption>Each line is small to medium to large for one texture; the star is S3TC. Every S3TC
+      star sits above its texture's whole neural curve, and the gap widens with the detail score.</figcaption>
+  </figure>
+
+  <p>
+    On every sourced texture S3TC beats the neural model, and it beats even the
+    large model while using roughly a third of its storage. Quantization obviously 
+    does not improve the performance, but it also surprisingly doesn't make it that much worse either. 
+  </p>
+
+  <h3>Three interesting results</h3>
+  <figure>
+    <img src="assets/own_fabric.png" alt="Fabric: original, small, medium, large">
+    <figcaption>Fabric: original, then small, medium, large.</figcaption>
+  </figure>
+  <ul>
+    <li><strong>High frequency textures (Fabric, detail 0.477): </strong> This is a regular woven pattern, 
+      which you might expect a small grid to capture, but the weave is near the grid's finest resolution. Instead of
+      dropping the weave, the model invents smooth large-scale blobs that are not in the texture. A
+      bilinear grid is a low-pass filter, and content above its cutoff does not simply disappear, but instead turns
+      into spurious low-frequency structure.</li>
+  </ul>
+  <figure>
+    <img src="assets/own_marble.png" alt="Marble: original, small, medium, large">
+    <figcaption>Marble: original, then small, medium, large.</figcaption>
+  </figure>
+  <ul>
+    <li><strong>Resolution findings (Marble, detail 0.124): </strong> Marble is sparse thin bright veins on a dark, fairly flat base, so almost all the error is
+      on a small fraction of texels. Small and medium cannot resolve the veins and instead blur them into wavy
+      bands. The large is a lot better but it is still not as good as S3TC.</li>
+  </ul>
+  <figure>
+    <img src="assets/own_concrete.png" alt="Concrete: original, small, medium, large">
+    <figcaption>Concrete: original, then small, medium, large.</figcaption>
+  </figure>
+  <ul>
+    <li><strong>Low-frequency textures still don't do great (Concrete, detail 0.036): </strong> 
+      This is the smoothest sourced texture and the closest to the starter
+      gradient texture that the neural model did best on (which had detail 0.006). The neural representation still 
+      loses to S3TC by 3 dB. The
+      reconstruction loses the fine aggregate speckle and shallow surface variation, leaving a
+      clean but blurry surface.</li>
+  </ul>
+
+  <h3>Conclusions</h3>
+  <ul>
+    <li><strong>Feature grid + MLP is a low-pass representation. </strong> The effective bandwidth is set by the finest grid
+      level and by how much the small MLP can sharpen, making it inferior to S3TC for capturing small details. Detail 
+      it cannot carry becomes blur, and just above the cutoff it can become spurious
+      low-frequency structure.</li>
+    <li>Feature grid + MLP is preferrable 
+      when dealing with a wide range of colors and low-frequency details, while S3TC captures 
+      full detail but giving up on color range.</li>
+    <li>S3TC adapts per block, so it holds
+      edges and fine detail that a global coordinate network smears. Beating it needs the learned model to
+      either match that adaptivity or buy enough resolution and capacity to not need it.</li>
+    <li>With the current configuration (small grids, a 2×64 MLP, 2000 steps), the
+      feature grid + MLP does not beat S3TC on natural textures with high-frequency details and low color ranges. In 
+      the future, this feature grid + MLP implementation might benefit from higher grid resolutions and more levels, more feature
+      channels, positional/frequency features, or a hash encoding so that fine detail is learnable. More aggressive quantization 
+      could also be experimented with as the current level of quantization did not have much of an effect on the final representation fidelity. </li>
+  </ul>
+
   <h2>Log</h2>
   <ul class="log">
     <li><span class="date">2026-09-20</span>Project scaffold, environment, and CUDA setup. Bilinear sampler
@@ -558,6 +666,11 @@ c_hat  = q / levels            # back to [0, 1]</code></pre>
     <li><span class="date">2026-09-20</span>Added post-training 8-bit quantization of the grid (and
       optionally the decoder) and re-ran the comparison. Size drops 2-4× for at most a couple of dB.
       After quantization the large model beats S3TC on all three textures at a smaller stored size.</li>
+    <li><span class="date">2026-09-20</span>Sourced eight CC0 textures (ambientCG) spanning frequency
+      content and added them to the provided set. S3TC beats the neural model on all eight, and the gap
+      grows with detail; the starter textures were unusually smooth (detail 0.006–0.051 vs 0.036–0.477).
+      Wrote up fabric (high-frequency failure), marble (resolution-limited), and concrete (even the
+      smoothest sourced texture loses).</li>
   </ul>
 
 </main>

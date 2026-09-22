@@ -46,6 +46,8 @@ python scripts/check_env.py
 - Decoder MLP + combined sizes: `python scripts/run_color_mlp.py`
 - Train a neural texture: `python scripts/run_train.py --texture gradient --size small`
 - Full size-vs-quality comparison (includes post-training 8-bit quantization): `python scripts/run_results.py` (add `--plot-only` to rebuild the figures without retraining)
+- Fetch the sourced (CC0) textures: `python scripts/fetch_own_textures.py --execute`
+- Sourced-texture comparison: `python scripts/run_own_textures.py`
 - Tests: `python tests/test_sampler_s3tc.py`, `python tests/test_s3tc_optimizations.py`, `python tests/test_feature_grid.py`, `python tests/test_color_mlp.py`, `python tests/test_train.py`, and `python tests/test_quantize.py`
 - Figures (writeup): `python scripts/make_figures.py`
 - Progression notes: [HTML](writeup/progression.html) · [PDF](writeup/progression.pdf)
