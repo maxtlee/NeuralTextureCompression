@@ -32,7 +32,7 @@ python scripts/check_env.py
 - `ntc/` (library): sampler, S3TC (plus seam-aware variants), feature grid, MLP, model, train, quantize, metrics
 - `scripts/`: runnable entry points + experiment drivers
 - `experiments/`: generated reconstructions, plots, metrics (not committed)
-- `writeup/`: running progression notes ([progression.html](writeup/progression.html), [progression.pdf](writeup/progression.pdf)) + final report source
+- `writeup/`: progression notes and the assignment writeup (`progression.html`/`.pdf`, `submission.html`/`.pdf`)
 
 ## Reproducing results
 
@@ -51,5 +51,6 @@ python scripts/check_env.py
 - Tests: `python tests/test_sampler_s3tc.py`, `python tests/test_s3tc_optimizations.py`, `python tests/test_feature_grid.py`, `python tests/test_color_mlp.py`, `python tests/test_train.py`, and `python tests/test_quantize.py`
 - Figures (writeup): `python scripts/make_figures.py`
 - Progression notes: [HTML](writeup/progression.html) · [PDF](writeup/progression.pdf)
-- Rebuild the PDF: `pip install -r requirements-docs.txt && python scripts/build_writeup.py`
+- Assignment writeup: [PDF](writeup/submission.pdf) ([source](writeup/submission.html))
+- Rebuild the PDFs: `pip install -r requirements-docs.txt && python scripts/build_writeup.py`
 - Outputs in `experiments/` (not committed).

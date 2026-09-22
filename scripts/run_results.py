@@ -172,25 +172,25 @@ def plot_size_quality(payload):
     # marker shapes stay reserved for the texture and are keyed separately.
     size_handles = [Patch(facecolor=c, label=s) for s, c in SIZE_COLOR.items()]
     size_handles.append(Patch(facecolor="#111111", label="S3TC (fixed 6x)"))
+    size_handles.append(plt.Line2D([], [], marker="o", linestyle="--", color="#666666",
+                                   markerfacecolor="white", markeredgecolor="#666666",
+                                   markersize=8, linewidth=0.8, label="8-bit quantized grid"))
     texture_handles = [plt.Line2D([], [], marker=m, linestyle="none", markerfacecolor="white",
                                   markeredgecolor="#444444", markeredgewidth=1.1, markersize=8,
                                   label=t)
                        for t, m in TEXTURE_MARKER.items()]
-    texture_handles.append(plt.Line2D([], [], marker="o", linestyle="--", color="#666666",
-                                      markerfacecolor="white", markeredgecolor="#666666",
-                                      markersize=8, linewidth=0.8, label="8-bit grid"))
-    leg_size = ax.legend(handles=size_handles, title="size / baseline", loc="lower center",
-                         ncol=4, fontsize=8, frameon=False)
+    leg_size = ax.legend(handles=size_handles, title="size / baseline", loc="upper center",
+                         bbox_to_anchor=(0.5, -0.20), ncol=3, fontsize=8, frameon=False)
     ax.add_artist(leg_size)
-    ax.legend(handles=texture_handles, title="texture / precision", loc="upper center", ncol=4,
-              fontsize=8, frameon=False)
+    ax.legend(handles=texture_handles, title="texture", loc="upper center",
+              bbox_to_anchor=(0.5, -0.44), ncol=3, fontsize=8, frameon=False)
     ax.set_xscale("log")
     ax.set_xlabel("stored size (KB, log scale, lower is better)")
     ax.set_ylabel("PSNR dB (higher is better)")
     ax.set_title("Size vs quality, neural models and S3TC (5 seeds)")
     ax.grid(alpha=0.25, which="both")
     fig.tight_layout()
-    fig.savefig(ASSETS / "p6_size_quality.png", dpi=150)
+    fig.savefig(ASSETS / "p6_size_quality.png", dpi=150, bbox_inches="tight")
 
 
 def main() -> int:

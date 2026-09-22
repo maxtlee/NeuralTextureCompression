@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neural Texture Compression — 15-474/674 A1 writeup</title>
+<style>
+  :root { --ink:#1b1d21; --muted:#5b616b; --line:#e3e6ea; --accent:#2f5d8a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: var(--ink); background: #fff;
+    font: 15.5px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { max-width: 850px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 1.7rem; margin: 0 0 4px; }
+  h2 { font-size: 1.24rem; margin: 34px 0 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+  h3 { font-size: 1rem; margin: 20px 0 4px; }
+  .meta { color: var(--muted); font-size: .9rem; }
+  a { color: var(--accent); }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .92em; background: #eef1f4; padding: 1px 5px; border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: .93rem; }
+  th, td { text-align: left; padding: 6px 9px; border-bottom: 1px solid var(--line); }
+  th { background: #f3f5f7; font-weight: 600; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  figure { margin: 16px 0; }
+  figure img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; display: block; }
+  figcaption { color: var(--muted); font-size: .85rem; margin-top: 6px; }
+  .grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+  @media (max-width: 620px) { .grid3 { grid-template-columns: 1fr; } }
+  ul { margin: 8px 0; }
+</style>
+</head>
+<body>
+<main>
+
+  <h1>Neural Texture Compression</h1>
+  <p class="meta">
+    15-474/674 Assignment 1. Code and reproduction instructions:
+    <a href="https://github.com/maxtlee/NeuralTextureCompression">github.com/maxtlee/NeuralTextureCompression</a>
+  </p>
+
+  <h2>P2. S3TC (DXT1) baseline</h2>
+
+  <h3>How the endpoints were chosen</h3>
+  <p>
+    For every 4&times;4 block:
+    <li> PCA: subtract the block mean, take the dominant direction from a few power
+    iterations on the 3&times;3 covariance, project the 16 texels, and use the two extremes as endpoints.</li>
+    <li> Refit:
+    assign each texel to its nearest palette entry, then solve the closed-form 2-variable least-squares problem for
+    the endpoints that best reconstruct those colors; repeat assign-and-refit twice. </li>
+    <li>Flat blocks keep their previous
+    endpoints (the fit is underdetermined). Endpoints are then quantized to RGB565 and written in 4-color mode.</li>
+  </p>
+
+  <h3>PSNR and compression</h3>
+  <table>
+    <thead><tr><th>Texture</th><th class="num">PSNR (dB)</th><th class="num">Compressed</th><th class="num">Original</th><th class="num">Ratio (comp/orig)</th></tr></thead>
+    <tbody>
+      <tr><td>gradient</td><td class="num">42.89</td><td class="num">128 KB</td><td class="num">768 KB</td><td class="num">1/6 (0.167)</td></tr>
+      <tr><td>bricks</td><td class="num">41.39</td><td class="num">128 KB</td><td class="num">768 KB</td><td class="num">1/6 (0.167)</td></tr>
+      <tr><td>clouds</td><td class="num">42.63</td><td class="num">128 KB</td><td class="num">768 KB</td><td class="num">1/6 (0.167)</td></tr>
+    </tbody>
+  </table>
+  <div class="grid3">
+    <figure><img src="assets/gradient_s3tc.png" alt="Gradient original vs S3TC"><figcaption>Gradient: original (left) vs S3TC (right).</figcaption></figure>
+    <figure><img src="assets/bricks_s3tc.png" alt="Bricks original vs S3TC"><figcaption>Bricks: original vs S3TC.</figcaption></figure>
+    <figure><img src="assets/clouds_s3tc.png" alt="Clouds original vs S3TC"><figcaption>Clouds: original vs S3TC.</figcaption></figure>
+  </div>
+
+  <h3>Issues with S3TC</h3>
+  <p>
+    Isotropic colorings (i.e. large variances in the second and third PCA axes) cause problems for S3TC. The palette is four points on the line between two
+    endpoints, so if the colors vary in two dimensions inside a block, the approximation is inaccurate. Additionally, due to the nature of S3TC, edges not aligned to the 4&times;4 
+    grid are smeared or stepped, and every block gets the same 64 bits whether it needs them or not, leading to more inefficiencies. Also notable is that S3TC inaccuracies are made more visible by steps at every
+    block boundary (very noticeable on the smooth gradient), making true perceived representation quality probably worse than the PSNR rating would suggest. 
+  </p>
+  <div class="grid3">
+    <figure><img src="assets/gradient_zoom.png" alt="Gradient zoom"><figcaption>Gradient: block banding.</figcaption></figure>
+    <figure><img src="assets/bricks_zoom.png" alt="Bricks zoom"><figcaption>Bricks: blocky shading.</figcaption></figure>
+    <figure><img src="assets/clouds_zoom.png" alt="Clouds zoom"><figcaption>Clouds: faint blocking.</figcaption></figure>
+  </div>
+
+  <h3>Why does green get an extra bit?</h3>
+  <p>
+    Green carries most of humans' perceived luminance (Rec. 709 weights &asymp; 0.21 R, 0.72 G, 0.07 B), so a green error is
+    ~3&times; as visible as in red and ~10&times; as visible as in blue. The extra level on green removes the most
+    visible banding per bit. Evolutionarily, this is probably because sunlight is 
+    mostly green and because green wavelength is in between red and blue. 
+  </p>
+
+  <h3>Why divide-by-levels quantization is a good approximation</h3>
+  <p>
+    <code>q = round(c &middot; levels)</code>, <code>c_hat = q / levels</code> returns an exact rational, while hardware
+    reconstructs a code by bit replication into 8 bits (<code>&asymp; round(q&middot;255/31)/255</code>). Since 255/31
+    is not an integer the two can differ, but by under a <code>1/255</code> step, and both are monotonic with the same
+    half-step rounding error, so the difference is not significant.
+  </p>
+
+  <h2>P6. Results and comparison</h2>
+  <p>Five seeds per configuration; S3TC is the fixed 6&times; point.</p>
+  <table>
+    <thead><tr><th>Texture</th><th>Model</th><th class="num">PSNR (dB)</th><th class="num">Size</th><th class="num">Compression (raw/comp)</th></tr></thead>
+    <tbody>
+      <tr><td>gradient</td><td>small</td><td class="num">53.3</td><td class="num">49.8 KB</td><td class="num">15.4&times;</td></tr>
+      <tr><td>gradient</td><td>medium</td><td class="num">58.0</td><td class="num">60.8 KB</td><td class="num">12.6&times;</td></tr>
+      <tr><td>gradient</td><td>large</td><td class="num">58.0</td><td class="num">361.3 KB</td><td class="num">2.1&times;</td></tr>
+      <tr><td>gradient</td><td>S3TC</td><td class="num">42.9</td><td class="num">128.0 KB</td><td class="num">6.0&times;</td></tr>
+      <tr><td>bricks</td><td>small</td><td class="num">32.1</td><td class="num">49.8 KB</td><td class="num">15.4&times;</td></tr>
+      <tr><td>bricks</td><td>medium</td><td class="num">36.4</td><td class="num">60.8 KB</td><td class="num">12.6&times;</td></tr>
+      <tr><td>bricks</td><td>large</td><td class="num">41.7</td><td class="num">361.3 KB</td><td class="num">2.1&times;</td></tr>
+      <tr><td>bricks</td><td>S3TC</td><td class="num">41.4</td><td class="num">128.0 KB</td><td class="num">6.0&times;</td></tr>
+      <tr><td>clouds</td><td>small</td><td class="num">38.9</td><td class="num">49.8 KB</td><td class="num">15.4&times;</td></tr>
+      <tr><td>clouds</td><td>medium</td><td class="num">40.9</td><td class="num">60.8 KB</td><td class="num">12.6&times;</td></tr>
+      <tr><td>clouds</td><td>large</td><td class="num">49.0</td><td class="num">361.3 KB</td><td class="num">2.1&times;</td></tr>
+      <tr><td>clouds</td><td>S3TC</td><td class="num">42.6</td><td class="num">128.0 KB</td><td class="num">6.0&times;</td></tr>
+    </tbody>
+  </table>
+
+  <figure>
+    <img src="assets/p6_training.png" alt="PSNR over training for the nine combinations">
+    <figcaption>PSNR over training, all nine combinations (mean of five seeds, shaded band min-max).</figcaption>
+  </figure>
+  <figure>
+    <img src="assets/p6_size_quality.png" alt="PSNR vs size, neural models and S3TC">
+    <figcaption>Color: size or baseline, marker shape: texture. Filled = float32, open = 8-bit quantized grid</figcaption>
+  </figure>
+
+  <h3>Best architecture per texture</h3>
+  <ul>
+    <li><strong>Gradient: medium (58.0 dB).</strong> It matches large at a sixth of the size; a smooth ramp does not
+      need the large grid's extra capacity. All sizes beat S3TC by ~10 dB or more.</li>
+    <li><strong>Bricks: large (41.7 dB).</strong> The sharp edges need the finest level and more features; small
+      collapses to 32.1 dB because one 64-level grid cannot hold mortar edges.</li>
+    <li><strong>Clouds: large (49.0 dB).</strong> Only large has coarse and fine levels plus enough features for the
+      multi-scale detail; medium is 40.9 dB.</li>
+  </ul>
+  <p class="meta">
+    Isolating effects: small&rarr;medium (extra coarse levels) gains +4.7 / +4.3 / +2.0 dB (gradient/bricks/clouds);
+    medium&rarr;large (feat_dim 2&rarr;4 plus the 128 level) gains +0.0 / +5.3 / +8.1 dB.
+  </p>
+
+  <h3>Did each texture's compression beat S3TC?</h3>
+  <ul>
+    <li><strong>Gradient: yes.</strong> All sizes beat S3TC, and small is both smaller (15.4&times; &gt; 6&times;) and
+      higher PSNR.</li>
+    <li><strong>Bricks and clouds: no clean win.</strong> Only large beats S3TC on PSNR, and it is larger
+      (2.1&times; vs. 6&times;). Small and medium are smaller but lower PSNR. At a matched size S3TC is better here.</li>
+  </ul>
+
+  <h3>Reconstructions</h3>
+  <figure><img src="assets/gradient_neural.png" alt="Gradient original/small/medium/large"><figcaption>Gradient: original, small, medium, large.</figcaption></figure>
+  <figure><img src="assets/bricks_neural.png" alt="Bricks original/small/medium/large"><figcaption>Bricks: original, small, medium, large.</figcaption></figure>
+  <figure><img src="assets/clouds_neural.png" alt="Clouds original/small/medium/large"><figcaption>Clouds: original, small, medium, large.</figcaption></figure>
+
+  <h2>P7. Quantization</h2>
+  <p>
+    Post-training, each stored array is quantized separately over its own range: round to the nearest of 256 levels,
+    store <code>q</code>, decode <code>x_hat = lo + q &middot; scale</code> (one byte per value plus two float32 range
+    endpoints per array).
+  </p>
+  <table>
+    <thead><tr><th>Texture</th><th>Model</th><th class="num">PSNR float</th><th class="num">PSNR 8-bit</th></tr></thead>
+    <tbody>
+      <tr><td>gradient</td><td>small</td><td class="num">53.3</td><td class="num">52.4</td></tr>
+      <tr><td>gradient</td><td>medium</td><td class="num">58.0</td><td class="num">56.1</td></tr>
+      <tr><td>gradient</td><td>large</td><td class="num">58.0</td><td class="num">57.1</td></tr>
+      <tr><td>bricks</td><td>small</td><td class="num">32.1</td><td class="num">31.3</td></tr>
+      <tr><td>bricks</td><td>medium</td><td class="num">36.4</td><td class="num">35.4</td></tr>
+      <tr><td>bricks</td><td>large</td><td class="num">41.7</td><td class="num">41.5</td></tr>
+      <tr><td>clouds</td><td>small</td><td class="num">38.9</td><td class="num">38.4</td></tr>
+      <tr><td>clouds</td><td>medium</td><td class="num">40.9</td><td class="num">40.3</td></tr>
+      <tr><td>clouds</td><td>large</td><td class="num">49.0</td><td class="num">48.1</td></tr>
+    </tbody>
+  </table>
+  <p class="meta">8-bit column quantizes both the grid and the MLP; quantizing the grid alone costs 0.01&ndash;0.65 dB.</p>
+  <table>
+    <thead><tr><th>Model</th><th class="num">float32</th><th class="num">8-bit grid</th><th class="num">8-bit grid + MLP</th></tr></thead>
+    <tbody>
+      <tr><td>small</td><td class="num">49.8 KB (15.4&times;)</td><td class="num">25.8 KB (29.8&times;)</td><td class="num">12.5 KB (61.5&times;)</td></tr>
+      <tr><td>medium</td><td class="num">60.8 KB (12.6&times;)</td><td class="num">29.3 KB (26.2&times;)</td><td class="num">15.3 KB (50.3&times;)</td></tr>
+      <tr><td>large</td><td class="num">361.3 KB (2.1&times;)</td><td class="num">106.3 KB (7.2&times;)</td><td class="num">90.4 KB (8.5&times;)</td></tr>
+    </tbody>
+  </table>
+  <p>
+    <strong>Quality lost:</strong> 0.01&ndash;0.65 dB when only the grid is quantized (large under 0.3 dB); up to 1.9 dB
+    on the small model when the decoder is quantized too (about 0.9 dB on medium/large). The grid features span a narrow
+    range, so a bucket is a tiny fraction of the value scale and the error is a small uniform rounding, so the quantization just turns into noise.
+    The small model is affected most because its MLP is a large share of its size and has a wider weight range.
+  </p>
+
+  <h2>P8. Textures sourced online</h2>
+  <p>
+    I found eight CC0 color maps from ambientCG spanning frequency content. Relative to the given textures, they have less-varying colors and more high-frequency patterns. 
+    I used the mean absolute Laplacian of the grayscale texture as a detail metric (higher = more high-frequency energy).
+  </p>
+  <figure>
+    <img src="assets/own_grid.png" alt="The eight sourced textures">
+    <figcaption>Top: gravel, grass, concrete, wood. Bottom: marble, fabric, rock, paving.</figcaption>
+  </figure>
+  <table>
+    <thead><tr><th>Texture</th><th class="num">detail score</th><th class="num">S3TC</th><th class="num">small</th><th class="num">medium</th><th class="num">large</th></tr></thead>
+    <tbody>
+      <tr><td>concrete</td><td class="num">0.036</td><td class="num">44.0</td><td class="num">37.4</td><td class="num">37.7</td><td class="num">40.7</td></tr>
+      <tr><td>wood</td><td class="num">0.112</td><td class="num">36.9</td><td class="num">27.0</td><td class="num">27.3</td><td class="num">31.2</td></tr>
+      <tr><td>rock</td><td class="num">0.113</td><td class="num">36.3</td><td class="num">26.5</td><td class="num">26.8</td><td class="num">30.6</td></tr>
+      <tr><td>marble</td><td class="num">0.124</td><td class="num">35.2</td><td class="num">24.3</td><td class="num">24.5</td><td class="num">30.0</td></tr>
+      <tr><td>paving</td><td class="num">0.139</td><td class="num">32.4</td><td class="num">23.9</td><td class="num">24.5</td><td class="num">28.2</td></tr>
+      <tr><td>grass</td><td class="num">0.138</td><td class="num">30.6</td><td class="num">23.2</td><td class="num">23.5</td><td class="num">27.0</td></tr>
+      <tr><td>gravel</td><td class="num">0.178</td><td class="num">29.4</td><td class="num">22.7</td><td class="num">23.0</td><td class="num">25.7</td></tr>
+      <tr><td>fabric</td><td class="num">0.477</td><td class="num">32.1</td><td class="num">18.3</td><td class="num">18.3</td><td class="num">20.4</td></tr>
+    </tbody>
+  </table>
+  <p class="meta">Size per architecture: small 49.8 KB (15.4&times;), medium 60.8 KB (12.6&times;), large 361.3 KB (2.1&times;); S3TC 128 KB (6&times;).</p>
+  <figure>
+    <img src="assets/own_size_quality.png" alt="Size vs quality for the sourced textures">
+    <figcaption>Each line is small&rarr;medium&rarr;large for one texture; the star is S3TC.</figcaption>
+  </figure>
+  <p>
+    On every sourced texture, the baseline S3TC beats the neural representation, including the much larger large model. 
+  </p>
+  <ul>
+    <li><strong>Fine repetitive weave (fabric, detail 0.477):</strong> The weave sits near the finest
+      grid resolution, and rather than dropping it the model invents smooth large-scale blobs that are not in the
+      texture: a bilinear grid is a low-pass filter, and content above its cutoff turns into spurious low-frequency
+      structure.</li>
+    <li><strong>Sparse thin veins (marble, 0.124):</strong> Small and medium blur the veins into wavy bands; large gains
+      +5.5 dB because the 128 level and four features can trace them, but it is still behind S3TC.</li>
+    <li><strong>Fine stochastic detail (gravel 0.178, grass 0.138, paving 0.139):</strong> On mid-detail textures,
+      S3TC still wins by 3.6&ndash;4.2 dB; the grid smooths the fine structure.</li>
+    <li><strong>Directional and multi-scale (wood 0.112, rock 0.113):</strong> S3TC wins by 5.7 dB; large recovers much
+      of the structure that small/medium lose.</li>
+    <li><strong>Smooth low-frequency (concrete, 0.036):</strong> This texture is the closest to the starter gradient, but it is still
+      3.3 dB behind S3TC; the reconstruction loses the fine aggregate speckle. The feature grid + MLP implementation's success over S3TC seems to be specific to
+      textures far below the grid's bandwidth, not a general improvement.</li>
+  </ul>
+
+  <h2>Conclusions</h2>
+  <ul>
+    <li>S3TC is a strong baseline: a fixed 6&times; at 41&ndash;44 dB PSNR, but its four-colors-per-block palette limits
+      color range and leaves visible blocking on smooth gradients.</li>
+    <li>The feature grid + MLP representation dominates when the content is smooth and low-frequency and the color range is wide:
+      on the starter textures it beats S3TC, and after 8-bit quantization the large model beats it on all three at a
+      smaller stored size (90.4 KB vs 128 KB).</li>
+    <li>It loses on natural textures. Across all eight sourced textures S3TC wins, even against the much larger large
+      model, and the gap grows with high-frequency detail (3.3 dB on concrete up to 11.7 dB on fabric). It behaves as
+      a low-pass representation: detail it cannot carry becomes blur, and content near or above the grid cutoff can
+      fold into spurious low-frequency structure.</li>
+    <li>Quantization is cheap. Quantizing the grid costs under 0.65 dB and shrinks the representation 2&ndash;4&times;;
+      the small model reaches 61.5&times; at 52.4 dB on the gradient.</li>
+    <li>The two methods are complementary: the learned model is better for smooth, wide-color-range content, while S3TC is better for fine detail.
+      Closing the high-frequency gap needs higher grid resolutions and more levels, more feature channels, and
+      maybe positional or hash features to improve the learnability of fine detail.</li>
+    <li>In the future, I would like to experiment with larger feature grids to learn higher-frequency details. I would also 
+      like to experiment with more aggressive quantization because I haven't hit an amount of quantization where the neural 
+      representation breaks down and the PSNR is barely affected at the current levels of quantization.</li>
+  </ul>
+
+</main>
+</body>
+</html>
