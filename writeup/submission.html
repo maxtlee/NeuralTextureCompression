@@ -14,6 +14,7 @@
   h2 { font-size: 1.24rem; margin: 34px 0 8px; padding-top: 12px; border-top: 1px solid var(--line); }
   h3 { font-size: 1rem; margin: 20px 0 4px; }
   .meta { color: var(--muted); font-size: .9rem; }
+  .tag { color: var(--muted); font-weight: 400; font-size: .85em; }
   a { color: var(--accent); }
   code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .92em; background: #eef1f4; padding: 1px 5px; border-radius: 4px; }
   table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: .93rem; }
@@ -256,6 +257,32 @@
       like to experiment with more aggressive quantization because I haven't hit an amount of quantization where the neural 
       representation breaks down and the PSNR is barely affected at the current levels of quantization.</li>
   </ul>
+
+  <h2>Appendix: seam-aware S3TC <span class="tag">(beyond the required problems)</span></h2>
+  <p>
+    Side experiment: how much of S3TC's blocking is recoverable by changing only the endpoint choice at the same
+    8 bytes/block? The seam metric compares, for every adjacent texel pair straddling a block boundary, the mean
+    absolute difference between the reconstruction's color step and the original's, so a perfect reconstruction scores
+    0 and only added discontinuities count. Baseline seam: gradient 0.00225, clouds 0.00690, bricks 0.00059. About
+    half the gradient seam is RGB565 rounding alone (float endpoints drop it to 0.00119).
+  </p>
+  <p>
+    I tested with a few different methods of optimizing the baseline endpoint selections by creating different loss functions 
+    that took into account a block's neighbors and running gradient descent-like optimization on them. 
+  </p>
+  <ul>
+    <li><strong>Block error diffusion</strong> feeds each block's edge error into its right/below neighbors before
+      fitting them. Mild: gradient seam &minus;8%, clouds &minus;4%; needs a light touch (alpha 0.1).</li>
+    <li><strong>Boundary-weighted refit</strong> pulls edge texels toward
+      <code>neighbor_decoded + original_step</code>. Best seam on the gradient (&minus;13%), roughly neutral PSNR.</li>
+    <li><strong>Seam-energy ICM</strong> lets each block search candidate endpoints (its own, PCA, the baseline fit,
+      and blends toward neighbors) against a local error plus a seam penalty. Best overall: gradient +1.34 dB and
+      &minus;9% seam, clouds +0.16 dB and &minus;14% seam.</li>
+  </ul>
+  <p>
+    All keep the fixed 6&times;, and none remove the roughly half of the seam that is RGB565 rounding. Bricks is
+    unchanged by all three (its blocks are flat, so there is no added step to fix), a useful sanity check.
+  </p>
 
 </main>
 </body>
