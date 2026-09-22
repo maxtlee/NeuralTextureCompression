@@ -283,6 +283,19 @@
     All keep the fixed 6&times;, and none remove the roughly half of the seam that is RGB565 rounding. Bricks is
     unchanged by all three (its blocks are flat, so there is no added step to fix), a useful sanity check.
   </p>
+  <figure>
+    <img src="assets/gradient_methods.png" alt="Gradient 4x zoom: original, baseline, diffusion, boundary, ICM">
+    <figcaption>Gradient, 4&times; zoom. Left to right: original, baseline, diffusion, boundary, ICM; the banding
+      gets progressively less pronounced.</figcaption>
+  </figure>
+  <figure>
+    <img src="assets/clouds_methods.png" alt="Clouds 4x zoom: original, baseline, diffusion, boundary, ICM">
+    <figcaption>Clouds, 4&times; zoom, same order.</figcaption>
+  </figure>
+  <figure>
+    <img src="assets/s3tc_opt_seam.png" alt="PSNR against seam error for each endpoint-selection method">
+    <figcaption>PSNR against seam error for the three methods and the baseline; up and to the left is better.</figcaption>
+  </figure>
 
 </main>
 </body>
