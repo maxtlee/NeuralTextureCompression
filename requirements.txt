@@ -1,17 +1,14 @@
-# Python deps for A1 (Neural Texture Compression).
+# Portable Python dependencies for the neural texture compression project.
 #
-# GPU note: this box's GTX 1050 Ti is compute capability sm_61 (Pascal).
-# The default PyPI torch build (+cu130) dropped Pascal and fails with
-# "no kernel image is available". The cu126 index below has sm_60 kernels,
-# which are binary-compatible with sm_61.
+# `pip install -r requirements.txt` installs the PyTorch build for your platform
+# (CUDA on most Linux/Windows GPUs, Apple MPS on macOS, CPU otherwise) plus the
+# small support libraries. See the README "GPU notes" if you need a specific
+# CUDA build; this machine's Pascal GTX 1050 Ti uses requirements-cu126.txt.
 #
-# On a different machine, install the torch build matching your GPU (see
-# https://pytorch.org/get-started/locally/) and let the extras resolve from
-# PyPI; the non-torch pins below are portable.
+# Developed on Python 3.14; anything 3.10+ should work.
 
---extra-index-url https://download.pytorch.org/whl/cu126
-torch==2.14.0+cu126
-torchvision==0.29.0+cu126
+torch>=2.4
+torchvision>=0.19
 numpy==2.5.3
 pillow==12.3.0
 matplotlib==3.11.2

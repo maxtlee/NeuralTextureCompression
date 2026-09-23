@@ -41,6 +41,28 @@
     <a href="https://github.com/maxtlee/NeuralTextureCompression">Full code and reproduction instructions (Github)</a>
   </p>
 
+  <h2>Reproducing these results</h2>
+  <p>
+    Needs Python 3.10+. Every driver writes images, plots, and metrics under
+    <code>experiments/</code>.
+  </p>
+  <pre><code># macOS / Linux
+python3 -m venv .venv &amp;&amp; source .venv/bin/activate
+# Windows (PowerShell): py -m venv .venv ; .venv\Scripts\Activate.ps1
+
+pip install -r requirements.txt        # portable; on a Pascal GPU use requirements-cu126.txt
+python scripts/check_env.py
+python scripts/run_results.py          # P6 + P7: 3 sizes x 3 textures x 5 seeds
+python scripts/fetch_own_textures.py --execute
+python scripts/run_own_textures.py     # P8</code></pre>
+  <p>
+    Run on any image:
+    <code>python scripts/run_custom_texture.py --image path/to/img.png</code> fits S3TC and the three neural
+    sizes and writes <code>&lt;name&gt;_comparison.png</code>, <code>&lt;name&gt;_zoom.png</code>,
+    <code>&lt;name&gt;_training.png</code>, and <code>&lt;name&gt;_metrics.json</code> under
+    <code>experiments/custom/</code>.
+  </p>
+
   <h2>P2. S3TC (DXT1) baseline</h2>
 
   <h3>How the endpoints were chosen</h3>

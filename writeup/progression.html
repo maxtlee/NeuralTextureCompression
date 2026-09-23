@@ -45,8 +45,8 @@
   <h1>Progression notes</h1>
   <p class="meta">
     Working log — last updated 2026-09-22. For the project overview, setup, and run commands,
-    see the <a href="../README.md">README</a>. I add to this page as the project grows; the final
-    report will be a trimmed subset of it.
+    see the <a href="../README.md">README</a>. I add to this page as the project grows; the assignment
+    report (<code>submission.pdf</code>) is a trimmed subset of it.
   </p>
 
   <h2>Current progress</h2>
@@ -70,6 +70,9 @@
       <li><strong>Sourced textures: </strong> eight CC0 textures from ambientCG spanning frequency
         content, tested with all three sizes and S3TC. S3TC wins on every one, and the gap grows with
         high-frequency detail; the three most interesting cases are analyzed below.</li>
+      <li><strong>Writeup and reproducibility: </strong> a shortened report for the graded problems
+        (<code>submission.pdf</code>), cross-platform install notes, and a runner for any custom image
+        (<code>run_custom_texture.py</code>) that saves comparison images and metrics.</li>
     </ul>
     <p>
       Every method now exposes the same <code>compress(texture)</code> / <code>sample(u, v)</code>
@@ -77,7 +80,8 @@
     </p>
     <h3>To implement next</h3>
     <ul>
-      <li>Trim this progression doc into the final report.</li>
+      <li>Nothing pending for the assignment. The natural next step is larger or higher-resolution grids
+        (or positional/hash features) to close the high-frequency gap found on the sourced textures.</li>
     </ul>
 
   <h2>The shared read convention</h2>
@@ -671,6 +675,9 @@ c_hat  = q / levels            # back to [0, 1]</code></pre>
       grows with detail; the starter textures were unusually smooth (detail 0.006–0.051 vs 0.036–0.477).
       Wrote up fabric (high-frequency failure), marble (resolution-limited), and concrete (even the
       smoothest sourced texture loses).</li>
+    <li><span class="date">2026-09-22</span>Wrote the shortened assignment report and added
+      reproducibility: macOS/Linux/Windows setup, a custom-image runner that saves comparison images and
+      metrics, and per-script image outputs.</li>
   </ul>
 
 </main>

@@ -3,7 +3,7 @@
 from .device import get_device
 from .codec import NeuralTextureCodec
 from .feature_grid import FeatureGrid
-from .io import load_image, save_image
+from .io import load_image, load_texture, save_image
 from .metrics import compression_factor, mse, psnr, raw_bytes, seam_error, texel_centers
 from .mlp import ColorMLP
 from .model import MODEL_SIZES, NeuralTexture
@@ -15,6 +15,7 @@ from .sampler import FullResSampler, sample_bilinear
 __all__ = [
     "get_device",
     "load_image",
+    "load_texture",
     "save_image",
     "mse",
     "psnr",
